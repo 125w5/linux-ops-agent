@@ -1,0 +1,13 @@
+[project]
+name = "ops-pilot-linux"
+version = "0.1.0"
+description = "Terminal-first Linux operations diagnosis agent."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+diag = "diag.main:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

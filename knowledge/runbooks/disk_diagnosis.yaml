@@ -1,0 +1,15 @@
+name: disk_diagnosis
+description: Disk space diagnosis runbook.
+steps:
+  - id: check_df
+    title: Check filesystem usage
+    command: df -h
+    risk: readonly
+  - id: check_top_dirs
+    title: Locate large directories
+    command: du -h --max-depth=1 / 2>/dev/null | sort -hr | head
+    risk: readonly
+  - id: check_large_files
+    title: Find large files
+    command: find / -type f -size +500M 2>/dev/null | head
+    risk: readonly

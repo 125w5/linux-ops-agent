@@ -1,0 +1,5 @@
+{
+  "database_path": "outputs/history/diag.db",
+  "report_dir": "outputs/reports",
+  "command_timeout_seconds": 20
+}

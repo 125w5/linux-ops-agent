@@ -1,0 +1,41 @@
+{
+  "readonly_allow": [
+    "awk",
+    "cat",
+    "df",
+    "docker system df",
+    "du",
+    "find",
+    "free",
+    "grep",
+    "head",
+    "journalctl",
+    "ps",
+    "sort",
+    "ss",
+    "systemctl status",
+    "tail",
+    "top",
+    "uptime",
+    "vmstat"
+  ],
+  "dangerous_block": [
+    "rm",
+    "mkfs",
+    "dd",
+    "chmod",
+    "chown",
+    "reboot",
+    "shutdown",
+    "poweroff",
+    "halt",
+    "init",
+    "systemctl restart",
+    "systemctl stop",
+    "systemctl start",
+    "docker system prune",
+    "journalctl --vacuum",
+    "kill",
+    "userdel"
+  ]
+}
