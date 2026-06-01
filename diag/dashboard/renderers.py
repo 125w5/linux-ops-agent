@@ -80,6 +80,7 @@ def command_discovery_text() -> str:
     return "\n".join(
         [
             "Commands:",
+            "  diag workbench 进入持续终端工作区",
             "  diag tui      打开全屏工作台",
             "  diag chat     进入交互诊断",
             "  --view raw    展开原始输出",

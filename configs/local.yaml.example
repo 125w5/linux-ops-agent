@@ -1,0 +1,13 @@
+providers:
+  default: mock
+  custom:
+    type: openai_compatible
+    model: deepseek-chat
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com/v1
+    timeout: 30
+    max_tokens: 1024
+profiles:
+  default:
+    provider: mock
+    model: mock-diagnosis-v1

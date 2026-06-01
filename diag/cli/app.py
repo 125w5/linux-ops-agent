@@ -6,6 +6,7 @@ from pathlib import Path
 from diag.ai.doctor import doctor_provider, list_models
 from diag.cli.output import stage
 from diag.dashboard.live_dashboard import LiveDashboard, render_command_discovery
+from diag.engine.rpc_server import RpcServer
 from diag.interactive.repl import run_interactive_repl
 from diag.interactive.session_state import InteractiveSessionState
 from diag.observability.audit_view import render_audit
@@ -28,18 +29,17 @@ from diag.ui.renderer import render_outcome
 from diag.ui.statusline import preview_statusline, statusline_config_text
 from diag.utils.encoding import configure_utf8_stdio
 from diag.utils.paths import database_path
+from diag.workbench.app import run_workbench
+from diag.workbench.context import WorkbenchOptions
 
 
 def _resolve_diagnose_view(args: argparse.Namespace) -> str:
     requested = args.view
-    caps = detect_capabilities()
     if requested:
         if requested in {"normal", "compact"}:
             return "plain"
         return requested
-    if caps.ci or not caps.is_tty:
-        return "plain"
-    return "dashboard"
+    return "plain"
 
 
 def _append_command_discovery(text: str, view: str) -> str:
@@ -324,6 +324,13 @@ def run_health(_: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
+def run_engine(args: argparse.Namespace) -> int:
+    if args.stdio:
+        return RpcServer().serve()
+    print("Use `python -m diag engine --stdio` to start the JSON-RPC engine.")
+    return 0
+
+
 def run_model_list(_: argparse.Namespace) -> int:
     print(list_models())
     return 0
@@ -367,6 +374,25 @@ def run_tui_command(args: argparse.Namespace) -> int:
     return run_tui(TuiOptions(target=args.target, mode=args.mode, layout=args.layout, task=args.task, service=args.service))
 
 
+def run_workbench_command(args: argparse.Namespace) -> int:
+    return run_workbench(
+        WorkbenchOptions(
+            target=args.target,
+            mode=args.mode,
+            task=args.task,
+            service=args.service,
+            provider=args.provider,
+            model=args.model,
+            profile=args.profile,
+            style=args.style,
+            skill=args.skill,
+            timeout=args.timeout,
+            use_ssh=args.ssh,
+            demo=args.demo,
+        )
+    )
+
+
 def run_config(_: argparse.Namespace) -> int:
     print(render_config_screen())
     return 0
@@ -374,7 +400,7 @@ def run_config(_: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="diag", description="Linux operations diagnosis assistant")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command")
 
     diagnose = subparsers.add_parser("diagnose", help="Run a diagnosis workflow")
     diagnose.add_argument("--target", default="localhost")
@@ -486,6 +512,10 @@ def build_parser() -> argparse.ArgumentParser:
     health = subparsers.add_parser("health", help="Check local OpsPilot health")
     health.set_defaults(func=run_health)
 
+    engine = subparsers.add_parser("engine", help="Start JSON-RPC diagnosis engine")
+    engine.add_argument("--stdio", action="store_true", help="Use JSON lines over stdin/stdout")
+    engine.set_defaults(func=run_engine)
+
     model = subparsers.add_parser("model", help="Inspect model providers")
     model_subparsers = model.add_subparsers(dest="model_command", required=True)
     model_list = model_subparsers.add_parser("list")
@@ -513,6 +543,21 @@ def build_parser() -> argparse.ArgumentParser:
     tui.add_argument("--service", default="nginx")
     tui.set_defaults(func=run_tui_command)
 
+    workbench = subparsers.add_parser("workbench", help="Start persistent conversational terminal workspace")
+    workbench.add_argument("--target", default="localhost")
+    workbench.add_argument("--mode", choices=["demo", "readonly", "confirm", "fault-lab", "blocked"], default="demo")
+    workbench.add_argument("--task", choices=["disk", "cpu", "service", "ssh-failure", "ssh"], default="disk")
+    workbench.add_argument("--service", default="nginx")
+    workbench.add_argument("--provider", default=None)
+    workbench.add_argument("--model", default=None)
+    workbench.add_argument("--profile", default=None)
+    workbench.add_argument("--style", choices=["student", "ops", "security", "minimal", "json"], default=None)
+    workbench.add_argument("--skill", default=None)
+    workbench.add_argument("--timeout", type=int, default=15)
+    workbench.add_argument("--ssh", action="store_true", help="Execute read-only diagnostics through OpenSSH")
+    workbench.add_argument("--demo", action="store_true", help="Use built-in demo command output")
+    workbench.set_defaults(func=run_workbench_command)
+
     config = subparsers.add_parser("config", help="Show configuration screen")
     config.set_defaults(func=run_config)
     return parser
@@ -522,4 +567,6 @@ def main(argv: list[str] | None = None) -> int:
     configure_utf8_stdio()
     parser = build_parser()
     args = parser.parse_args(argv)
+    if not hasattr(args, "func"):
+        args = parser.parse_args(["workbench"])
     return args.func(args)

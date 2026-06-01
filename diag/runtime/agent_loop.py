@@ -15,6 +15,7 @@ from diag.hooks.before_command import BeforeCommandSafetyHook
 from diag.hooks.events import AFTER_COMMAND, BEFORE_COMMAND
 from diag.hooks.hook_manager import HookManager
 from diag.permissions.mode import PermissionMode
+from diag.permissions.approval import ApprovalProvider
 from diag.permissions.policy import PermissionDecision, PermissionPolicy
 from diag.plugins.loader import PluginLoader
 from diag.planner.plan_builder import build_plan
@@ -60,6 +61,7 @@ class AgentLoop:
         style: str | None = None,
         stage: StageCallback | None = None,
         event_callback: EventCallback | None = None,
+        approval_provider: ApprovalProvider | None = None,
     ) -> DiagnosisOutcome:
         stage = stage or (lambda _index, _total, _message: None)
         emit = event_callback or (lambda _event_type, _payload: None)
@@ -103,7 +105,7 @@ class AgentLoop:
             session=session,
             transcript=transcript,
             registry=registry,
-            permission_policy=PermissionPolicy(permission_mode),
+            permission_policy=PermissionPolicy(permission_mode, approval_provider=approval_provider),
             hook_manager=hook_manager,
             executor=executor,
             command_tool=CommandTool(executor),

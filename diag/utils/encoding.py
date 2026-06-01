@@ -6,7 +6,7 @@ import sys
 
 def configure_utf8_stdio() -> None:
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-    for stream_name in ("stdout", "stderr"):
+    for stream_name in ("stdin", "stdout", "stderr"):
         stream = getattr(sys, stream_name, None)
         if stream is None or not hasattr(stream, "reconfigure"):
             continue
