@@ -9,8 +9,7 @@ if not defined BUN_CMD if exist "%USERPROFILE%\.bun\bin\bun.exe" set "BUN_CMD=%U
 if defined BUN_CMD (
   if exist "%~dp0apps\opspilot-cli\src\main.tsx" (
     "%BUN_CMD%" run "%~dp0apps\opspilot-cli\src\main.tsx" %*
-    if %ERRORLEVEL%==0 exit /b 0
-    echo [opspilot] TypeScript frontend failed, falling back to Python workbench.
+    exit /b %ERRORLEVEL%
   )
 )
 python -m diag workbench --target localhost --mode demo %*

@@ -23,7 +23,7 @@ export const initialState: AppState = {
   model: 'default',
   status: 'idle',
   risk: 'unknown',
-  messages: [],
+  messages: [{ role: 'assistant', content: '你好，我是 OpsPilot。描述故障，或输入 /help。' }],
   plan: [],
   evidence: [],
   resources: {},
