@@ -1,0 +1,3 @@
+layout:
+  name: debug
+  panes: [PlanPane, RawPane, TranscriptPane, AuditPane]

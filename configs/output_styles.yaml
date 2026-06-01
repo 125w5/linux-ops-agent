@@ -1,0 +1,22 @@
+output_styles:
+  default: ops
+  student:
+    title: Student Diagnosis
+    risk_label: Risk
+    suggestions_label: Suggested Learning Actions
+  ops:
+    title: Ops Diagnosis
+    risk_label: Risk
+    suggestions_label: Suggested Operations
+  security:
+    title: Security Review
+    risk_label: Threat Level
+    suggestions_label: Security Recommendations
+  minimal:
+    title: Diagnosis
+    risk_label: Risk
+    suggestions_label: Suggestions
+  json:
+    title: json
+    risk_label: risk
+    suggestions_label: suggestions

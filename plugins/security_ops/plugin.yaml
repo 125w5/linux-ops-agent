@@ -1,0 +1,13 @@
+name: security_ops
+version: 0.1.0
+description: SSH security log diagnosis helpers.
+entry: entry.py
+permissions: [register_tools, register_runbooks]
+exports: [tools, runbooks]
+demo_fixtures: [ssh_bruteforce]
+ui:
+  icon: S
+  color: red
+  category: security
+  display_name: Security Ops
+  priority: 20

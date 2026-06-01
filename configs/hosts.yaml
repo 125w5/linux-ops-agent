@@ -1,0 +1,7 @@
+hosts:
+  node-01:
+    host: 127.0.0.1
+    user: ops
+    port: 22
+    identity_file: ~/.ssh/id_rsa
+    connect_timeout: 10

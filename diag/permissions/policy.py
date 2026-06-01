@@ -21,15 +21,17 @@ class PermissionPolicy:
         self.mode = mode
         self.approval_provider = approval_provider or ApprovalProvider()
 
-    def evaluate(self, command: str) -> PermissionDecision:
+    def evaluate(self, command: str, preset_risk: RiskLevel | None = None) -> PermissionDecision:
         safety: SafetyDecision = check_command(command)
         if self.mode == PermissionMode.BLOCKED:
             return PermissionDecision(False, RiskLevel.BLOCKED, "Permission mode is blocked")
         if not safety.allowed:
             return PermissionDecision(False, safety.risk_level, safety.reason)
-        if safety.risk_level == RiskLevel.LOW_RISK and self.mode == PermissionMode.CONFIRM:
-            approval = self.approval_provider.request(ApprovalRequest(command, safety.reason))
-            return PermissionDecision(approval.approved, safety.risk_level, approval.reason, requires_confirmation=True)
-        if safety.risk_level == RiskLevel.LOW_RISK:
-            return PermissionDecision(False, safety.risk_level, "Low-risk commands require confirm mode")
-        return PermissionDecision(True, safety.risk_level, safety.reason)
+        risk_level = preset_risk or safety.risk_level
+        reason = "Low-risk command requires confirmation" if risk_level == RiskLevel.LOW_RISK else safety.reason
+        if risk_level == RiskLevel.LOW_RISK and self.mode == PermissionMode.CONFIRM:
+            approval = self.approval_provider.request(ApprovalRequest(command, reason))
+            return PermissionDecision(approval.approved, risk_level, approval.reason, requires_confirmation=True)
+        if risk_level == RiskLevel.LOW_RISK:
+            return PermissionDecision(False, risk_level, "Low-risk commands require confirm mode")
+        return PermissionDecision(True, risk_level, reason)

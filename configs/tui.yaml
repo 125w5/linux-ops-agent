@@ -1,0 +1,3 @@
+tui:
+  refresh_per_second: 2
+  default_layout: default

@@ -1,0 +1,7 @@
+Screen {
+  layout: vertical;
+}
+
+#status, #evidence, #input {
+  width: 100%;
+}

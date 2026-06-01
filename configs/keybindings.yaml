@@ -1,0 +1,17 @@
+keybindings:
+  F1: help
+  F2: raw
+  F3: resources
+  F4: report
+  F5: run
+  F6: evidence
+  F7: plugins
+  F8: model
+  Tab: next_pane
+  Shift+Tab: previous_pane
+  Ctrl+R: run
+  Ctrl+A: approve
+  Ctrl+D: deny
+  Ctrl+L: layout
+  Ctrl+S: save_report
+  Esc: close_modal

@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 .venv/
 .env
+configs/local.yaml
 outputs/reports/*
 outputs/logs/*
 outputs/history/*

@@ -1,0 +1,4 @@
+{
+  "type": "object",
+  "required": ["session_id", "task_type", "target", "evidence", "risk_level"]
+}

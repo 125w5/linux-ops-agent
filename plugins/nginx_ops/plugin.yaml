@@ -1,0 +1,13 @@
+name: nginx_ops
+version: 0.1.0
+description: Nginx service diagnosis helpers.
+entry: entry.py
+permissions: [register_tools, register_runbooks]
+exports: [tools, runbooks]
+demo_fixtures: [service_failed]
+ui:
+  icon: N
+  color: cyan
+  category: service
+  display_name: Nginx Ops
+  priority: 10

@@ -1,0 +1,7 @@
+Screen {
+  layout: grid;
+}
+
+#plan, #raw, #transcript, #audit {
+  width: 50%;
+}

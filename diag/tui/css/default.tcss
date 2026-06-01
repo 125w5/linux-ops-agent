@@ -1,0 +1,15 @@
+Screen {
+  layout: horizontal;
+}
+
+#plan {
+  width: 30%;
+}
+
+#evidence {
+  width: 45%;
+}
+
+#resources {
+  width: 25%;
+}

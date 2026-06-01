@@ -40,6 +40,7 @@ class CommandResult:
     risk_level: str
     executed_at: str = field(default_factory=utc_now)
     skipped: bool = False
+    truncated: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
