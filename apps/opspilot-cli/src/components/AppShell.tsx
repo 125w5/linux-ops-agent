@@ -2,7 +2,10 @@ import React from 'react'
 import { Box, Text } from 'ink'
 import type { AppState } from '../state/appState.js'
 import type { PlanStep } from '../state/events.js'
+import { ActionBar } from './ActionBar.js'
+import { ConversationPane } from './ConversationPane.js'
 import { InputBox } from './InputBox.js'
+import { MonitorPane } from './MonitorPane.js'
 
 const WIDTH = 78
 
@@ -15,19 +18,11 @@ export function AppShell({ state, input }: { state: AppState; input: string }): 
       </Box>
 
       <Section title="Monitor">
-        <Text>{monitorText(state)}</Text>
+        <MonitorPane resources={state.resources} history={state.resourceHistory} />
       </Section>
 
       <Section title="Conversation">
-        {conversationLines(state).map((line, index) => (
-          <Text key={index}>
-            <Text color={line.role === 'assistant' ? 'cyan' : line.role === 'user' ? 'green' : 'yellow'}>
-              {line.role.padEnd(9)}
-            </Text>
-            {'  '}
-            {line.content}
-          </Text>
-        ))}
+        <ConversationPane messages={state.messages} />
       </Section>
 
       <Box flexDirection="row">
@@ -55,6 +50,9 @@ export function AppShell({ state, input }: { state: AppState; input: string }): 
           </Section>
         </Box>
       </Box>
+      <Box paddingX={1}>
+        <ActionBar actions={state.actions} />
+      </Box>
     </Box>
     <InputBox value={input} />
   </Box>
@@ -69,23 +67,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function statusText(state: AppState): string {
   return `session=${shortSession(state.sessionId)}  mode=${state.mode}  model=${state.model || 'default'}  risk=${state.risk}`
-}
-
-function monitorText(state: AppState): string {
-  const system = readObject(state.resources.system)
-  const disk = readObject(state.resources.disk)
-  const cpu = formatPercent(system.cpu_percent)
-  const memory = formatPercent(system.memory_percent)
-  const diskPercent = formatPercent(disk.percent ?? disk.disk_percent)
-  return `CPU ${cpu}   MEM ${memory}   DISK ${diskPercent}   provider=mock   status=${state.status}`
-}
-
-function conversationLines(state: AppState): Array<{ role: string; content: string }> {
-  const lines = state.messages.slice(-8).map(message => ({
-    role: message.role,
-    content: message.content.replace(/\n/g, '  '),
-  }))
-  return lines.length ? lines : [{ role: 'assistant', content: '你好，我是 OpsPilot。描述故障，或输入 /help。' }]
 }
 
 function planLines(plan: PlanStep[]): string[] {
@@ -116,13 +97,6 @@ function resourceText(state: AppState): string {
 
 function readObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? value as Record<string, unknown> : {}
-}
-
-function formatPercent(value: unknown): string {
-  if (typeof value === 'number') {
-    return `${value.toFixed(1)}%`
-  }
-  return '--'
 }
 
 function shortSession(sessionId: string): string {

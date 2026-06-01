@@ -28,7 +28,8 @@ export function reducer(state: AppState, action: Action): AppState {
     return { ...state, status: event, messages: [...state.messages, { role: 'user' as const, content: String(payload.content ?? '') }].slice(-200) }
   }
   if (event === 'AssistantMessage') {
-    return { ...state, status: event, messages: [...state.messages, { role: 'assistant' as const, content: String(payload.content ?? '') }].slice(-200) }
+    const actions = parseActions(payload.actions)
+    return { ...state, status: event, actions, messages: [...state.messages, { role: 'assistant' as const, content: String(payload.content ?? ''), actions }].slice(-200) }
   }
   if (event === 'PlanCreated') {
     const steps = Array.isArray(payload.steps) ? payload.steps as PlanStep[] : []
@@ -46,7 +47,8 @@ export function reducer(state: AppState, action: Action): AppState {
     return { ...state, status: event, evidence: items.map(item => String((item as Record<string, unknown>).content ?? '')) }
   }
   if (event === 'ResourceUpdated') {
-    return { ...state, status: event, resources: { ...state.resources, ...payload } }
+    const resources = { ...state.resources, ...payload }
+    return { ...state, status: event, resources, resourceHistory: [...state.resourceHistory, resources].slice(-30) }
   }
   if (event === 'ApprovalRequired') {
     return { ...state, status: event, approvalPending: true }
@@ -65,4 +67,14 @@ export function reducer(state: AppState, action: Action): AppState {
 
 function updateStep(plan: PlanStep[], id: string, status: string): PlanStep[] {
   return plan.map(step => step.id === id ? { ...step, status } : step)
+}
+
+function parseActions(value: unknown): AppState['actions'] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .map(item => item && typeof item === 'object' ? item as Record<string, unknown> : {})
+    .filter(item => item.label && item.command)
+    .map(item => ({ label: String(item.label), command: String(item.command) }))
 }

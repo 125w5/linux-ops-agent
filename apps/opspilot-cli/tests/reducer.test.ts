@@ -2,6 +2,9 @@ import { expect, test } from 'bun:test'
 import { initialState } from '../src/state/appState.js'
 import { reducer } from '../src/state/reducer.js'
 
+const evidenceText = String.fromCodePoint(0x6839, 0x76ee, 0x5f55, 0x4f7f, 0x7528, 0x7387, 0x6b63, 0x5e38)
+const evidenceNeedle = String.fromCodePoint(0x6839, 0x76ee, 0x5f55)
+
 test('applies session, plan, evidence, resource and report events', () => {
   const session = reducer(initialState, {
     type: 'engine-event',
@@ -13,7 +16,7 @@ test('applies session, plan, evidence, resource and report events', () => {
   })
   const evidence = reducer(planned, {
     type: 'engine-event',
-    event: { event: 'EvidenceAdded', payload: { items: [{ content: '根目录使用率正常' }] } },
+    event: { event: 'EvidenceAdded', payload: { items: [{ content: evidenceText }] } },
   })
   const resources = reducer(evidence, {
     type: 'engine-event',
@@ -26,7 +29,8 @@ test('applies session, plan, evidence, resource and report events', () => {
 
   expect(report.sessionId).toBe('s1')
   expect(report.plan[0].status).toBe('pending')
-  expect(report.evidence[0]).toContain('根目录')
+  expect(report.evidence[0]).toContain(evidenceNeedle)
   expect(report.resources.system).toEqual({ cpu_percent: 12 })
+  expect(report.resourceHistory).toHaveLength(1)
   expect(report.reportPath).toBe('reports/demo.md')
 })

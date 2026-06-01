@@ -21,7 +21,7 @@ class EngineUtf8RpcTests(unittest.TestCase):
 
         content = stdout.getvalue()
         self.assertIn("为什么要检查磁盘", content)
-        self.assertIn("只读诊断", content)
+        self.assertIn("当前会话还没有证据", content)
         self.assertNotIn("\\u4e3a", content)
 
 

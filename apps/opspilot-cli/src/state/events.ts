@@ -6,6 +6,12 @@ export type EngineEvent = {
 export type Message = {
   role: 'user' | 'assistant' | 'tool' | 'system'
   content: string
+  actions?: ActionCard[]
+}
+
+export type ActionCard = {
+  label: string
+  command: string
 }
 
 export type PlanStep = {

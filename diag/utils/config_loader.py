@@ -9,8 +9,8 @@ from diag.utils.paths import project_root
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
-    "providers": {"default": "mock", "mock": {"type": "mock", "model": "mock-diagnosis-v1"}},
-    "profiles": {"default": {"provider": "mock", "model": "mock-diagnosis-v1"}},
+    "providers": {"default": "openai", "mock": {"type": "mock", "model": "mock-diagnosis-v1"}},
+    "profiles": {"default": {"provider": "openai", "model": "gpt-4o-mini"}, "demo": {"provider": "mock", "model": "mock-diagnosis-v1"}},
     "plugins": {"enabled": []},
 }
 

@@ -1,16 +1,19 @@
 profiles:
   default:
-    provider: mock
-    model: mock-diagnosis-v1
+    provider: openai
+    model: gpt-4o-mini
     roles:
-      planner: mock
-      summarizer: mock
-      risk_reviewer: mock
-      report_writer: mock
+      planner: openai
+      summarizer: openai
+      risk_reviewer: openai
+      report_writer: openai
   demo:
     provider: mock
     model: mock-diagnosis-v1
   local:
+    provider: ollama
+    model: llama3.2
+  offline:
     provider: ollama
     model: llama3.2
   cloud-openai:

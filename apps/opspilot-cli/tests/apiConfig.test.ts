@@ -13,6 +13,7 @@ test('builds provider patch using env var name instead of api key', () => {
     providers: {
       default: 'openai',
       openai: {
+        type: 'openai-compatible',
         model: 'gpt-4.1-mini',
         base_url: 'https://api.openai.com/v1',
         api_key_env: 'OPENAI_API_KEY',

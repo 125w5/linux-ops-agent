@@ -20,7 +20,8 @@ def _sample_psutil() -> dict[str, Any]:
     cpu_percent = float(psutil.cpu_percent(interval=None))
     load_avg = list(os.getloadavg()) if hasattr(os, "getloadavg") else []
     memory = psutil.virtual_memory()
-    disk = psutil.disk_usage("/")
+    disk_path = _disk_sample_path()
+    disk = psutil.disk_usage(disk_path)
     processes: list[dict[str, Any]] = []
     for proc in psutil.process_iter(["pid", "name", "cpu_percent", "memory_percent"]):
         try:
@@ -44,7 +45,7 @@ def _sample_psutil() -> dict[str, Any]:
             "memory_percent": float(memory.percent),
         },
         "disk": {
-            "mountpoint": "/",
+            "mountpoint": _display_mountpoint(disk_path),
             "used_gb": disk.used / (1024**3),
             "total_gb": disk.total / (1024**3),
             "percent": float(disk.percent),
@@ -122,13 +123,27 @@ def _read_proc_stat_cpu_percent() -> float | None:
 
 
 def _fallback_disk() -> dict[str, Any]:
-    usage = shutil.disk_usage("/")
+    disk_path = _disk_sample_path()
+    usage = shutil.disk_usage(disk_path)
     return {
-        "mountpoint": "/",
+        "mountpoint": _display_mountpoint(disk_path),
         "used_gb": usage.used / (1024**3),
         "total_gb": usage.total / (1024**3),
         "percent": usage.used / usage.total * 100 if usage.total else None,
     }
+
+
+def _disk_sample_path() -> str:
+    if os.name == "nt":
+        return Path.cwd().anchor or os.path.abspath(os.sep)
+    return "/"
+
+
+def _display_mountpoint(path: str) -> str:
+    if os.name == "nt":
+        drive = Path(path).anchor.rstrip("\\/")
+        return drive or path
+    return path
 
 
 def _fallback_processes(sort_key: str) -> list[dict[str, Any]]:

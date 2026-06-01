@@ -19,14 +19,14 @@ class EngineChatMessageTests(unittest.TestCase):
     def test_explain_is_conversational_without_plan(self) -> None:
         result = self.methods.chat_message({"session_id": self.session["session_id"], "text": "为什么要检查磁盘？"})
 
-        self.assertEqual(result["intent"], "explain")
-        self.assertIn("只读诊断", result["message"])
+        self.assertEqual(result["intent"], "evidence_question")
+        self.assertIn("当前会话还没有证据", result["message"])
         self.assertNotIn("PlanCreated", [event.get("event") for event in self.events()])
 
     def test_plain_message_creates_plan(self) -> None:
         result = self.methods.chat_message({"session_id": self.session["session_id"], "text": "检查磁盘"})
 
-        self.assertEqual(result["intent"], "plan")
+        self.assertEqual(result["intent"], "fault_description")
         self.assertIn("plan", result)
         self.assertIn("PlanCreated", [event.get("event") for event in self.events()])
 

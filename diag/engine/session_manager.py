@@ -24,6 +24,7 @@ class EngineSession:
     last_outcome: DiagnosisOutcome | None = None
     evidence: list[dict[str, Any]] = field(default_factory=list)
     messages: list[dict[str, Any]] = field(default_factory=list)
+    config_flow: dict[str, Any] = field(default_factory=dict)
     started_at: str = field(default_factory=utc_now)
 
 
