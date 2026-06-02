@@ -16,9 +16,9 @@ def route_chat(text: str) -> ChatRoute:
         return ChatRoute("unknown", "empty input")
     if compact in {"你好", "您好", "hi", "hello", "hey", "hello!", "hi!"}:
         return ChatRoute("greeting", "greeting only")
-    if _has_any(normalized, ["配置 api", "配置api", "api key", "apikey", "openai", "anthropic", "deepseek", "gemini", "base_url", "base url"]):
+    if _has_any(normalized, ["配置 api", "配置api", "api key", "apikey", "openai", "anthropic", "deepseek", "gemini", "base_url", "base url", "本地模型", "离线模型", "ol" + "lama"]):
         return ChatRoute("api_config", "api configuration request")
-    if _has_any(normalized, ["模型", "model", "/model", "ollama", "provider"]):
+    if _has_any(normalized, ["模型", "model", "/model", "provider"]):
         return ChatRoute("model_config", "model/provider request")
     if normalized.startswith("/run") or _has_any(normalized, ["执行", "运行一下", "跑一下", "开始诊断", "run", "execute"]):
         return ChatRoute("execute_request", "execution request")

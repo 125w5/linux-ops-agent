@@ -9,7 +9,7 @@ export type ModelDoctorRow = {
 }
 
 export function ModelScreen(): React.ReactElement {
-  return <Text>Model: /model list, /model doctor, /model use provider:model</Text>
+  return <Text>Model: /model list, /model doctor, /model use provider:model. API-only; mock is for demo/test.</Text>
 }
 
 export function ModelDoctorVisual({ rows }: { rows: ModelDoctorRow[] }): React.ReactElement {

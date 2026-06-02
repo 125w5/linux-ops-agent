@@ -8,7 +8,7 @@ export function ActionBar({ actions }: { actions: ActionCardType[] }): React.Rea
     return null
   }
   return <Box flexDirection="column" marginTop={1}>
-    <Text color="gray">Actions:</Text>
-    {actions.slice(0, 5).map((action, index) => <ActionCard key={`${action.command}-${index}`} action={action} index={index} />)}
+    <Text color="gray">Choose:</Text>
+    {actions.slice(0, 6).map((action, index) => <ActionCard key={`${action.command}-${index}`} action={action} index={index} />)}
   </Box>
 }

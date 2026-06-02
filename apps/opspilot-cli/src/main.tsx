@@ -8,7 +8,7 @@ program
   .name('opspilot')
   .description('OpsPilot conversational terminal agent')
   .option('--target <target>', 'target host', 'localhost')
-  .option('--mode <mode>', 'permission mode', 'demo')
+  .option('--mode <mode>', 'permission mode', 'readonly')
   .action(options => startApp({ target: options.target, mode: options.mode }))
 
 program.parse()

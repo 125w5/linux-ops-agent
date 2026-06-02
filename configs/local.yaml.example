@@ -1,13 +1,9 @@
+# Local API-only overrides. Do not store real API keys here.
+# Put real keys in environment variables such as DEEPSEEK_API_KEY.
 providers:
-  default: mock
-  custom:
-    type: openai_compatible
-    model: deepseek-chat
+  default: deepseek
+  deepseek:
+    type: openai-compatible
+    model: deepseek-v4-flash
+    base_url: https://api.deepseek.com
     api_key_env: DEEPSEEK_API_KEY
-    base_url: https://api.deepseek.com/v1
-    timeout: 30
-    max_tokens: 1024
-profiles:
-  default:
-    provider: mock
-    model: mock-diagnosis-v1

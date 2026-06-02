@@ -8,4 +8,4 @@ if ((Test-Path $bunPath) -and (Test-Path (Join-Path $root "apps/opspilot-cli/src
     & $bunPath run (Join-Path $root "apps/opspilot-cli/src/main.tsx") @args
     exit $LASTEXITCODE
 }
-python -m diag workbench --target localhost --mode demo @args
+python -m diag workbench --target localhost --mode readonly @args

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import urllib.error
 import urllib.request
 from collections.abc import Iterable
@@ -9,6 +8,8 @@ from collections.abc import Iterable
 from diag.ai.errors import LLMConfigurationError, LLMRequestError
 from diag.ai.message import LLMMessage, LLMResponse, ProviderHealth
 from diag.ai.provider import LLMProvider
+from diag.ai.remote_url_validator import validate_remote_api_url
+from diag.utils.env_vars import get_env_var
 
 
 class OpenAICompatibleProvider(LLMProvider):
@@ -23,7 +24,7 @@ class OpenAICompatibleProvider(LLMProvider):
         timeout: int = 30,
         max_tokens: int = 1024,
     ) -> None:
-        self.base_url = base_url.rstrip("/")
+        self.base_url = validate_remote_api_url(base_url).rstrip("/")
         self.api_key_env = api_key_env
         self.model = model
         self.name = provider_name
@@ -31,7 +32,7 @@ class OpenAICompatibleProvider(LLMProvider):
         self.max_tokens = max_tokens
 
     def _api_key(self) -> str | None:
-        return os.environ.get(self.api_key_env) if self.api_key_env else None
+        return get_env_var(self.api_key_env)
 
     def healthcheck(self) -> ProviderHealth:
         if self.api_key_env and not self._api_key():

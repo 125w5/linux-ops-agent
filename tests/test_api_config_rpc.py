@@ -16,7 +16,9 @@ class ApiConfigRpcTests(unittest.TestCase):
             methods._local_path = lambda: local_path  # type: ignore[method-assign]
             session = methods.session_start({"mode": "demo"})
 
-            methods.config_api_start({"session_id": session["session_id"], "provider": "deepseek"})
+            methods.config_api_start({"session_id": session["session_id"], "provider": "openai_compatible"})
+            methods.config_api_set_base_url({"session_id": session["session_id"], "base_url": "https://api.deepseek.com/v1"})
+            methods.config_api_set_model({"session_id": session["session_id"], "model": "deepseek-chat"})
             methods.config_api_set_api_key_env({"session_id": session["session_id"], "api_key_env": "DEEPSEEK_API_KEY"})
             preview = methods.config_api_preview({"session_id": session["session_id"]})
             saved = methods.config_api_save({"session_id": session["session_id"]})
@@ -25,7 +27,7 @@ class ApiConfigRpcTests(unittest.TestCase):
             self.assertIn("DEEPSEEK_API_KEY", preview["yaml"])
             self.assertIn("DEEPSEEK_API_KEY", content)
             self.assertNotIn("sk-", content)
-            self.assertEqual(saved["provider"], "deepseek")
+            self.assertEqual(saved["provider"], "openai_compatible")
 
     def test_real_api_key_is_rejected(self) -> None:
         methods = EngineMethods(EngineSessionManager(), EventStream(lambda _line: None))

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any
 
+from diag.ai.config import API_PROVIDER_NAMES, assert_api_provider_name, normalize_provider_name, resolve_provider_config
 from diag.ai.doctor import doctor_provider, list_models
+from diag.ai.errors import LLMConfigurationError
+from diag.ai.remote_url_validator import LOCAL_AI_DISABLED_MESSAGE, validate_remote_api_url
 from diag.engine.chat_router import route_chat
 from diag.engine.event_stream import EventStream
 from diag.engine.session_manager import EngineSession, EngineSessionManager
@@ -14,6 +16,7 @@ from diag.plugins.loader import PluginLoader
 from diag.runtime.agent_loop import AgentLoop
 from diag.tools.registry import build_default_registry
 from diag.utils.config_loader import deep_merge, load_config, read_config_file
+from diag.utils.env_vars import get_env_var
 from diag.utils.paths import project_root
 
 
@@ -59,6 +62,13 @@ class EngineMethods:
         if session.mode.value == "demo" and session.provider is None:
             session.provider = "mock"
             session.model = session.model or "mock-diagnosis-v1"
+        elif session.provider is None:
+            try:
+                config = resolve_provider_config(profile=session.profile)
+                session.provider = config.name
+                session.model = session.model or config.model
+            except ValueError:
+                pass
         payload = self._session_payload(session)
         self.events.emit("SessionStarted", payload)
         return payload
@@ -74,10 +84,13 @@ class EngineMethods:
         if route.intent == "greeting":
             return self._assistant_reply(session, route.intent, "你好，我是 OpsPilot。你可以描述故障，我会先解释和规划，不会擅自执行。", actions=[action("配置 API", "/config api"), action("查看帮助", "/help")])
         if route.intent == "api_config":
-            self.config_api_start({"session_id": session.session_id, "provider": _provider_hint(text)})
+            provider_hint = _provider_hint(text)
+            if provider_hint == "blocked_local_ai":
+                return self._assistant_reply(session, route.intent, "OpsPilot 已禁用本地 AI，避免消耗本机 CPU/GPU/内存。请配置远程 API。", actions=[action("配置远程 API", "/config api"), action("检查模型", "/model doctor")])
+            self.config_api_start({"session_id": session.session_id, "provider": provider_hint})
             return self._assistant_reply(session, route.intent, "可以，我会用对话式向导帮你配置 API。真实 key 只放环境变量，不会写入配置文件。", actions=[action("开始配置 API", "/config api"), action("检查模型", "/model doctor")])
         if route.intent == "model_config":
-            return self._assistant_reply(session, route.intent, "可以查看、检查或切换模型。默认不会偷偷启用本地 Ollama，除非你主动选择。", actions=[action("模型检查", "/model doctor"), action("配置 API", "/config api")])
+            return self._assistant_reply(session, route.intent, "OpsPilot 是 API-only。请配置远程 API；mock 仅用于 demo/test。", actions=[action("模型检查", "/model doctor"), action("配置 API", "/config api")])
         if route.intent == "execute_request":
             if session.current_plan is None:
                 plan = self.plan_create({"session_id": session.session_id, "input": text})
@@ -168,11 +181,12 @@ class EngineMethods:
     def model_list(self, _params: dict[str, Any]) -> dict[str, Any]:
         config = load_config()
         providers = config.get("providers", {})
-        sanitized = {name: dict(data) for name, data in providers.items() if isinstance(data, dict)}
+        allowed = API_PROVIDER_NAMES | {"mock"}
+        sanitized = {name: dict(data) for name, data in providers.items() if isinstance(data, dict) and name in allowed}
         for data in sanitized.values():
             env_name = data.get("api_key_env")
             if env_name:
-                data["api_key_env_present"] = bool(os.environ.get(str(env_name)))
+                data["api_key_env_present"] = bool(get_env_var(str(env_name)))
         return {"text": list_models(), "providers": sanitized, "default": providers.get("default")}
 
     def model_doctor(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -184,6 +198,10 @@ class EngineMethods:
         if ":" not in spec:
             raise ValueError("model.set expects provider:model")
         provider, model = spec.split(":", 1)
+        provider = normalize_provider_name(provider)
+        assert_api_provider_name(provider)
+        if _contains_local_ai_term(model):
+            raise ValueError("OpsPilot 已禁用本地 AI，避免消耗本机 CPU/GPU/内存。请配置远程 API。")
         patch = {"providers": {"default": provider, provider: {"model": model}}, "profiles": {"default": {"provider": provider, "model": model}}}
         self._write_local_patch(patch)
         return {"provider": provider, "model": model}
@@ -193,20 +211,24 @@ class EngineMethods:
         providers = config.get("providers", {})
         for value in providers.values():
             if isinstance(value, dict) and value.get("api_key_env"):
-                value["api_key_env_present"] = bool(os.environ.get(str(value.get("api_key_env"))))
+                value["api_key_env_present"] = bool(get_env_var(str(value.get("api_key_env"))))
         return config
 
     def config_patch(self, params: dict[str, Any]) -> dict[str, Any]:
         patch = params.get("patch")
         if not isinstance(patch, dict):
             raise ValueError("config.patch requires object patch")
+        _validate_config_patch_api_only(patch)
         self._write_local_patch(patch)
         return {"saved": str(self._local_path())}
 
     def config_api_start(self, params: dict[str, Any]) -> dict[str, Any]:
         session = self.sessions.get(params.get("session_id"))
-        provider = str(params.get("provider") or "openai-compatible")
-        preset = _provider_preset(provider)
+        provider = normalize_provider_name(str(params.get("provider") or load_config().get("providers", {}).get("default") or "deepseek"))
+        if provider == "blocked_local_ai":
+            raise ValueError("OpsPilot 已禁用本地 AI，避免消耗本机 CPU/GPU/内存。请配置远程 API。")
+        assert_api_provider_name(provider)
+        preset = _provider_defaults(provider)
         session.config_flow = {
             "provider": provider,
             "type": preset["type"],
@@ -218,15 +240,27 @@ class EngineMethods:
 
     def config_api_set_provider(self, params: dict[str, Any]) -> dict[str, Any]:
         session = self.sessions.get(params.get("session_id"))
-        provider = str(params.get("provider") or "openai-compatible")
-        preset = _provider_preset(provider)
+        provider = normalize_provider_name(str(params.get("provider") or "deepseek"))
+        if provider == "blocked_local_ai":
+            raise ValueError("OpsPilot 已禁用本地 AI，避免消耗本机 CPU/GPU/内存。请配置远程 API。")
+        assert_api_provider_name(provider)
+        preset = _provider_defaults(provider)
         session.config_flow.update({"provider": provider, "type": preset["type"], "base_url": preset.get("base_url", ""), "model": preset.get("model", ""), "api_key_env": preset.get("api_key_env", "")})
         return {"flow": dict(session.config_flow)}
 
     def config_api_set_base_url(self, params: dict[str, Any]) -> dict[str, Any]:
+        value = str(params.get("base_url") or params.get("value") or "")
+        if value:
+            try:
+                validate_remote_api_url(value)
+            except LLMConfigurationError as exc:
+                raise ValueError(str(exc)) from exc
         return self._set_config_flow_value(params, "base_url")
 
     def config_api_set_model(self, params: dict[str, Any]) -> dict[str, Any]:
+        value = str(params.get("model") or params.get("value") or "")
+        if _contains_local_ai_term(value):
+            raise ValueError("OpsPilot 已禁用本地 AI，避免消耗本机 CPU/GPU/内存。请配置远程 API。")
         return self._set_config_flow_value(params, "model")
 
     def config_api_set_api_key_env(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -248,6 +282,11 @@ class EngineMethods:
         self._write_local_patch(patch)
         provider = session.config_flow.get("provider", "provider")
         env_name = session.config_flow.get("api_key_env", "")
+        model = str(session.config_flow.get("model") or patch.get("profiles", {}).get("default", {}).get("model") or "")
+        session.provider = str(provider)
+        session.model = model
+        self.events.emit("SessionStarted", self._session_payload(session))
+        return {"saved": str(self._local_path()), "provider": provider, "model": model, "api_key_env": env_name, "message": f"已保存 {provider}:{model} 配置，当前会话已切换。真实 key 只读取环境变量 {env_name}，不会写入配置文件。"}
         return {"saved": str(self._local_path()), "provider": provider, "api_key_env": env_name, "message": f"已保存 {provider} 配置。请在系统环境变量中设置 {env_name}，不要把真实 key 写入文件。"}
 
     def plugin_list(self, _params: dict[str, Any]) -> dict[str, Any]:
@@ -287,9 +326,18 @@ class EngineMethods:
         if not session.config_flow:
             self.config_api_start({"session_id": session.session_id})
         flow = session.config_flow
-        provider = str(flow.get("provider") or "openai-compatible")
+        provider = normalize_provider_name(str(flow.get("provider") or "deepseek"))
+        if provider == "blocked_local_ai" or str(flow.get("type") or "") == "blocked":
+            raise ValueError("OpsPilot 已禁用本地 AI，避免消耗本机 CPU/GPU/内存。请配置远程 API。")
+        assert_api_provider_name(provider)
         provider_config = {"type": str(flow.get("type") or "openai-compatible"), "model": str(flow.get("model") or ""), "timeout": 30, "max_tokens": 1024}
+        if _contains_local_ai_term(provider_config["model"]):
+            raise ValueError("OpsPilot 已禁用本地 AI，避免消耗本机 CPU/GPU/内存。请配置远程 API。")
         if flow.get("base_url"):
+            try:
+                validate_remote_api_url(str(flow["base_url"]))
+            except LLMConfigurationError as exc:
+                raise ValueError(str(exc)) from exc
             provider_config["base_url"] = str(flow["base_url"])
         if flow.get("api_key_env"):
             provider_config["api_key_env"] = str(flow["api_key_env"])
@@ -314,29 +362,67 @@ def action(label: str, command: str) -> dict[str, str]:
 
 def _provider_hint(text: str) -> str:
     lowered = text.lower()
-    if "deepseek" in lowered:
+    if _contains_local_ai_term(lowered) or "localhost" in lowered or "127.0.0.1" in lowered:
+        return "blocked_local_ai"
+    if "deepseek" in lowered or "deep seek" in lowered:
         return "deepseek"
     if "gemini" in lowered:
         return "gemini"
     if "anthropic" in lowered or "claude" in lowered:
         return "anthropic"
-    if "ollama" in lowered:
-        return "ollama"
     if "openai" in lowered:
         return "openai"
-    return "openai-compatible"
+    return "openai_compatible"
 
 
 def _provider_preset(provider: str) -> dict[str, str]:
     presets = {
         "openai": {"type": "openai", "base_url": "https://api.openai.com/v1", "model": "gpt-4.1-mini", "api_key_env": "OPENAI_API_KEY"},
         "anthropic": {"type": "anthropic", "base_url": "https://api.anthropic.com", "model": "claude-3-5-haiku-latest", "api_key_env": "ANTHROPIC_API_KEY"},
-        "deepseek": {"type": "openai-compatible", "base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat", "api_key_env": "DEEPSEEK_API_KEY"},
         "gemini": {"type": "openai-compatible", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "model": "gemini-1.5-flash", "api_key_env": "GEMINI_API_KEY"},
-        "ollama": {"type": "ollama", "base_url": "http://localhost:11434", "model": "llama3.2", "api_key_env": ""},
+        "deepseek": {"type": "openai-compatible", "base_url": "https://api.deepseek.com", "model": "deepseek-v4-flash", "api_key_env": "DEEPSEEK_API_KEY"},
+        "openai_compatible": {"type": "openai-compatible", "base_url": "https://api.example.com/v1", "model": "api-compatible-model", "api_key_env": "OPENAI_COMPATIBLE_API_KEY"},
         "custom": {"type": "openai-compatible", "base_url": "", "model": "", "api_key_env": "CUSTOM_API_KEY"},
+        "blocked_local_ai": {"type": "blocked", "base_url": "", "model": "", "api_key_env": ""},
     }
     return presets.get(provider, {"type": "openai-compatible", "base_url": "", "model": "", "api_key_env": "OPENAI_COMPATIBLE_API_KEY"})
+
+
+def _provider_defaults(provider: str) -> dict[str, str]:
+    defaults = dict(_provider_preset(provider))
+    data = load_config().get("providers", {}).get(provider, {})
+    if isinstance(data, dict):
+        for key in ("type", "base_url", "model", "api_key_env"):
+            if data.get(key) is not None:
+                defaults[key] = str(data.get(key))
+    return defaults
+
+
+def _contains_local_ai_term(value: str) -> bool:
+    lowered = value.lower()
+    return any(word in lowered for word in ["ol" + "lama", "v" + "llm", "l" + "lama.cpp", "l" + "lama_cpp", "本地模型", "离线模型", "local model", "off" + "line"])
+
+
+def _validate_config_patch_api_only(patch: dict[str, Any]) -> None:
+    providers = patch.get("providers")
+    if not isinstance(providers, dict):
+        return
+    default_provider = providers.get("default")
+    if default_provider:
+        assert_api_provider_name(normalize_provider_name(str(default_provider)))
+    for name, data in providers.items():
+        if name == "default":
+            continue
+        assert_api_provider_name(normalize_provider_name(str(name)))
+        if isinstance(data, dict):
+            provider_type = str(data.get("type") or "").lower()
+            if any(marker in provider_type for marker in ["ol" + "lama", "v" + "llm", "l" + "lama", "local", "off" + "line"]):
+                raise ValueError("OpsPilot 已禁用本地 AI，避免消耗本机 CPU/GPU/内存。请配置远程 API。")
+            if data.get("base_url"):
+                try:
+                    validate_remote_api_url(str(data["base_url"]))
+                except LLMConfigurationError as exc:
+                    raise ValueError(str(exc)) from exc
 
 
 def _report_message(result: dict[str, Any]) -> str:

@@ -3,7 +3,7 @@ import { envCommand, providerPatch } from '../src/services/apiConfig.js'
 
 test('api config wizard data stores env var name only', () => {
   const patch = providerPatch({
-    provider: 'deepseek',
+    provider: 'openai_compatible',
     type: 'openai-compatible',
     model: 'deepseek-chat',
     baseUrl: 'https://api.deepseek.com/v1',

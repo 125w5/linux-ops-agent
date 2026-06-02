@@ -10,12 +10,6 @@ profiles:
   demo:
     provider: mock
     model: mock-diagnosis-v1
-  local:
-    provider: ollama
-    model: llama3.2
-  offline:
-    provider: ollama
-    model: llama3.2
-  cloud-openai:
-    provider: openai
-    model: gpt-4o-mini
+  custom_api:
+    provider: openai_compatible
+    model: api-compatible-model

@@ -12,4 +12,4 @@ if [ -n "$BUN_CMD" ] && [ -f "apps/opspilot-cli/src/main.tsx" ]; then
   "$BUN_CMD" run "apps/opspilot-cli/src/main.tsx" "$@"
   exit $?
 fi
-python3 -m diag workbench --target localhost --mode demo "$@"
+python3 -m diag workbench --target localhost --mode readonly "$@"

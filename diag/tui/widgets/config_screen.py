@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from diag.utils.config_loader import load_config
+from diag.utils.env_vars import get_env_var
 from diag.utils.paths import project_root
 
 
@@ -34,7 +34,7 @@ def redact_provider_env_status() -> dict[str, str]:
             continue
         env_name = data.get("api_key_env")
         if env_name:
-            status[name] = f"{env_name}={'set' if os.environ.get(str(env_name)) else 'missing'}"
+            status[name] = f"{env_name}={'set' if get_env_var(str(env_name)) else 'missing'}"
         else:
             status[name] = "no api key env required"
     return status

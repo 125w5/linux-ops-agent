@@ -11,3 +11,7 @@ class LLMConfigurationError(LLMError):
 
 class LLMRequestError(LLMError):
     pass
+
+
+class NeedApiConfig(LLMConfigurationError):
+    pass

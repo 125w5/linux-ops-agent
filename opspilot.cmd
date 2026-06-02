@@ -12,4 +12,4 @@ if defined BUN_CMD (
     exit /b %ERRORLEVEL%
   )
 )
-python -m diag workbench --target localhost --mode demo %*
+python -m diag workbench --target localhost --mode readonly %*

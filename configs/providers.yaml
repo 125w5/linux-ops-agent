@@ -19,23 +19,31 @@ providers:
     base_url: https://api.anthropic.com
     timeout: 30
     max_tokens: 1024
-  ollama:
-    type: ollama
-    model: llama3.2
-    base_url: http://localhost:11434
-    timeout: 30
-    max_tokens: 1024
-  deepseek:
-    type: openai-compatible
-    model: deepseek-chat
-    api_key_env: DEEPSEEK_API_KEY
-    base_url: https://api.deepseek.com/v1
-    timeout: 30
-    max_tokens: 1024
   gemini:
     type: openai-compatible
     model: gemini-1.5-flash
     api_key_env: GEMINI_API_KEY
     base_url: https://generativelanguage.googleapis.com/v1beta/openai
+    timeout: 30
+    max_tokens: 1024
+  deepseek:
+    type: openai-compatible
+    model: deepseek-v4-flash
+    api_key_env: DEEPSEEK_API_KEY
+    base_url: https://api.deepseek.com
+    timeout: 30
+    max_tokens: 1024
+  openai_compatible:
+    type: openai-compatible
+    model: api-compatible-model
+    api_key_env: OPENAI_COMPATIBLE_API_KEY
+    base_url: https://api.example.com/v1
+    timeout: 30
+    max_tokens: 1024
+  custom:
+    type: openai-compatible
+    model: custom-remote-model
+    api_key_env: CUSTOM_API_KEY
+    base_url: https://api.example.com/v1
     timeout: 30
     max_tokens: 1024

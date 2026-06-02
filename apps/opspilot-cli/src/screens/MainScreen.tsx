@@ -3,7 +3,9 @@ import { useApp, useInput } from 'ink'
 import type { AppState } from '../state/appState.js'
 import { reducer } from '../state/reducer.js'
 import { AppShell } from '../components/AppShell.js'
+import { apiConfigActions, modelActions } from '../actions/registry.js'
 import { EngineClient, type RpcMessage } from '../services/engineClient.js'
+import type { ActionCard } from '../state/events.js'
 
 export function MainScreen({
   initialState,
@@ -110,7 +112,7 @@ export function MainScreen({
     }
     if (text.startsWith('/config')) {
       dispatch({ type: 'message', message: { role: 'user', content: text } })
-      dispatch({ type: 'message', message: { role: 'assistant', content: configHelpText() } })
+      dispatch({ type: 'message', message: { role: 'assistant', content: configHelpText(), actions: apiConfigActions() } })
       return
     }
     await requestAndReport(activeClient, 'chat.message', { session_id, text }, false)
@@ -128,8 +130,12 @@ export function MainScreen({
 
   async function handleModel(activeClient: EngineClient, text: string): Promise<void> {
     const parts = text.split(/\s+/)
+    if (!parts[1] || parts[1] === 'list') {
+      appendResultText(await activeClient.request('model.list'), undefined, modelActions())
+      return
+    }
     if (parts[1] === 'doctor') {
-      appendResultText(await activeClient.request('model.doctor', { provider: parts[2] }))
+      appendResultText(await activeClient.request('model.doctor', { provider: parts[2] }), undefined, modelActions())
       return
     }
     if (parts[1] === 'use' && parts[2]) {
@@ -141,22 +147,53 @@ export function MainScreen({
 
   async function handleConfigApi(activeClient: EngineClient, text: string): Promise<void> {
     const parts = text.split(/\s+/)
+    const session_id = stateRef.current.sessionId || undefined
     if (parts[2] === 'preview') {
-      appendResultText(await activeClient.request('config.api.preview', { session_id: stateRef.current.sessionId || undefined }))
+      appendResultText(await activeClient.request('config.api.preview', { session_id }))
       return
     }
     if (parts[2] === 'save') {
-      appendResultText(await activeClient.request('config.api.save', { session_id: stateRef.current.sessionId || undefined }))
+      appendResultText(await activeClient.request('config.api.save', { session_id }), undefined, [{ label: 'Model doctor', command: '/model doctor deepseek' }, { label: 'Run diagnosis', command: '/run' }])
+      return
+    }
+    if (['base', 'base-url', 'base_url', 'url'].includes(parts[2] ?? '')) {
+      const base_url = parts.slice(3).join(' ')
+      const response = await activeClient.request('config.api.set_base_url', { session_id, base_url })
+      dispatchConfigFlow(response, 'Base URL updated.')
+      return
+    }
+    if (parts[2] === 'model') {
+      const model = parts.slice(3).join(' ')
+      const response = await activeClient.request('config.api.set_model', { session_id, model })
+      dispatchConfigFlow(response, 'Model updated.')
+      return
+    }
+    if (['env', 'key-env', 'api_key_env'].includes(parts[2] ?? '')) {
+      const api_key_env = parts.slice(3).join(' ')
+      const response = await activeClient.request('config.api.set_api_key_env', { session_id, api_key_env })
+      dispatchConfigFlow(response, 'API key env updated.')
       return
     }
     const provider = parts[2]
-    const response = await activeClient.request('config.api.start', { session_id: stateRef.current.sessionId || undefined, provider })
+    const response = await activeClient.request('config.api.start', provider ? { session_id, provider } : { session_id })
+    dispatchConfigFlow(response, 'API setup started.')
+  }
+
+  function dispatchConfigFlow(response: RpcMessage, prefix: string): void {
+    if (response.error) {
+      appendResultText(response)
+      return
+    }
     const result = response.result as Record<string, unknown> | undefined
     const flow = result?.flow as Record<string, unknown> | undefined
-    const summary = flow
-      ? `API setup started. provider=${String(flow.provider)} model=${String(flow.model || 'set later')} api_key_env=${String(flow.api_key_env || 'set later')}. Use /model doctor to check env vars.`
-      : 'API setup started.'
-    dispatch({ type: 'message', message: { role: 'assistant', content: summary, actions: [{ label: 'Preview config', command: '/config api preview' }, { label: 'Model doctor', command: '/model doctor' }] } })
+    dispatch({
+      type: 'message',
+      message: {
+        role: 'assistant',
+        content: flow ? configFlowSummary(prefix, flow) : prefix,
+        actions: configFlowActions(),
+      },
+    })
   }
 
   async function requestAndReport(
@@ -171,7 +208,7 @@ export function MainScreen({
     }
   }
 
-  function appendResultText(response: RpcMessage, fallback?: string): void {
+  function appendResultText(response: RpcMessage, fallback?: string, actions?: ReturnType<typeof modelActions>): void {
     if (response.error) {
       const error = response.error as Record<string, unknown>
       dispatch({ type: 'message', message: { role: 'assistant', content: `Request failed: ${String(error.message ?? 'unknown error')}` } })
@@ -180,7 +217,7 @@ export function MainScreen({
     const result = response.result as Record<string, unknown> | undefined
     const text = result?.text ?? result?.message ?? result?.yaml ?? fallback
     if (text) {
-      dispatch({ type: 'message', message: { role: 'assistant', content: String(text) } })
+      dispatch({ type: 'message', message: { role: 'assistant', content: String(text), actions } })
     }
   }
 
@@ -192,6 +229,27 @@ export function MainScreen({
   return <AppShell state={state} input={input} />
 }
 
+function configFlowSummary(prefix: string, flow: Record<string, unknown>): string {
+  return [
+    prefix,
+    `provider=${String(flow.provider ?? 'deepseek')}`,
+    `base_url=${String(flow.base_url ?? 'set later')}`,
+    `model=${String(flow.model || 'set later')}`,
+    `api_key_env=${String(flow.api_key_env || 'set later')}`,
+    'Use /config api save to write configs/local.yaml. Put the real key in the environment variable only.',
+  ].join('\n')
+}
+
+function configFlowActions(): ActionCard[] {
+  return [
+    { label: 'Save config', command: '/config api save' },
+    { label: 'Preview config', command: '/config api preview' },
+    { label: 'Model doctor', command: '/model doctor deepseek' },
+    { label: 'Use V4 Pro', command: '/config api model deepseek-v4-pro' },
+    { label: 'Run diagnosis', command: '/run' },
+  ]
+}
+
 function helpText(): string {
   return [
     'Commands:',
@@ -200,6 +258,7 @@ function helpText(): string {
     '/resources refresh resource snapshot',
     '/model list | /model doctor [provider] | /model use provider:model',
     '/config api [provider] start API setup',
+    '/config api model <name> | env <ENV> | base-url <url> | save',
     '/action 1 or 1 run an action card',
     '/exit exit',
   ].join('\n')
@@ -209,8 +268,9 @@ function configHelpText(): string {
   return [
     'API setup:',
     '1. Store real keys in environment variables only.',
-    '2. Use /config api deepseek or /config api openai to start.',
-    '3. Use /model doctor openai to check missing env vars.',
-    '4. configs/local.yaml stores api_key_env, never the real key.',
+    '2. Use /config api deepseek to start the DeepSeek V4 preset.',
+    '3. Use /config api model deepseek-v4-pro to switch from flash to pro.',
+    '4. Use /model doctor deepseek to check missing env vars.',
+    '5. configs/local.yaml stores api_key_env, never the real key.',
   ].join('\n')
 }

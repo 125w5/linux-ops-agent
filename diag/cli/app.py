@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from diag.ai.errors import NeedApiConfig
 from diag.ai.doctor import doctor_provider, list_models
 from diag.cli.output import stage
 from diag.dashboard.live_dashboard import LiveDashboard, render_command_discovery
@@ -81,7 +82,11 @@ def run_diagnose(args: argparse.Namespace) -> int:
         return 0
 
     render_view = "raw" if view == "raw" else "verbose" if view == "verbose" else "quiet" if view == "quiet" else "json" if view == "json" else "plain"
-    outcome = run_loop()
+    try:
+        outcome = run_loop()
+    except NeedApiConfig as exc:
+        print(f"{exc}\n请运行 /config api 配置远程 API，或设置对应 API key 环境变量。demo 模式会使用 mock。")
+        return 2
     rendered = render_outcome(outcome, view=render_view, style=args.style, resources=getattr(outcome, "resource_usage", None))
     print(_append_command_discovery(rendered, render_view))
     return 0

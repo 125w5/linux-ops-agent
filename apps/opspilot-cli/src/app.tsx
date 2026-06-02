@@ -9,5 +9,5 @@ export type StartAppOptions = {
 }
 
 export function startApp(options: StartAppOptions = {}): void {
-  render(<MainScreen initialState={initialState} target={options.target ?? 'localhost'} mode={options.mode ?? 'demo'} />)
+  render(<MainScreen initialState={initialState} target={options.target ?? 'localhost'} mode={options.mode ?? 'readonly'} />)
 }

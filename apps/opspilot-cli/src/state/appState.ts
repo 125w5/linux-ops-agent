@@ -21,7 +21,7 @@ export type AppState = {
 export const initialState: AppState = {
   sessionId: '',
   target: 'localhost',
-  mode: 'demo',
+  mode: 'readonly',
   model: 'default',
   status: 'idle',
   risk: 'unknown',
