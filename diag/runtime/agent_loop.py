@@ -137,11 +137,7 @@ class AgentLoop:
             usage.ai_calls += 1
             return fn(limited_text)
 
-        try:
-            ai_plan = call_ai("planner", user_input, lambda text: router.planner(text, [tool.name for tool in registry.list()]))
-            transcript.append_event("ai_planner", ai_plan)
-        except Exception as exc:
-            transcript.append_event("ai_planner_error", {"error": str(exc)})
+        transcript.append_event("ai_planner_skipped", {"reason": "deterministic plan builder drives command selection"})
         plan = build_plan(user_input, target, task_type, registry=registry, service=service)
         transcript.append_plan(plan)
         emit(

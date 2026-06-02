@@ -121,7 +121,7 @@ class LocalExecutor:
             )
         try:
             completed = subprocess.run(
-                ["wsl.exe", "bash", "-lc", command],
+                ["wsl.exe", "bash", "-lc", _prepare_wsl_command(command)],
                 capture_output=True,
                 timeout=self.timeout_seconds,
             )
@@ -155,6 +155,14 @@ def _decode_process_output(data: bytes | str | None) -> str:
     if b"\x00" in data[:200]:
         return data.decode("utf-16-le", errors="replace")
     return data.decode("utf-8", errors="replace")
+
+
+def _prepare_wsl_command(command: str) -> str:
+    rewrites = {
+        "du -h --max-depth=1 / 2>/dev/null | sort -hr | head": "du -xh --max-depth=1 / --exclude=/mnt --exclude=/proc --exclude=/sys --exclude=/dev 2>/dev/null | sort -hr | head",
+        "find / -type f -size +500M 2>/dev/null | head": "find / \\( -path /mnt -o -path /proc -o -path /sys -o -path /dev \\) -prune -o -type f -size +500M -print 2>/dev/null | head",
+    }
+    return rewrites.get(command, command)
 
 
 def _looks_like_wsl_setup_output(text: str) -> bool:

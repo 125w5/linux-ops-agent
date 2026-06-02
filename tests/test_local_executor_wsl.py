@@ -35,6 +35,17 @@ class LocalExecutorWslTests(unittest.TestCase):
         self.assertEqual(result.return_code, 1)
         self.assertIn("Restart Windows", result.stderr)
 
+    def test_windows_wsl_rewrites_slow_root_walks(self) -> None:
+        completed = subprocess.CompletedProcess(["wsl.exe"], 0, stdout=b"", stderr=b"")
+        command = "du -h --max-depth=1 / 2>/dev/null | sort -hr | head"
+        with patch("platform.system", return_value="Windows"), patch("shutil.which", return_value="C:/Windows/System32/wsl.exe"), patch(
+            "subprocess.run", return_value=completed
+        ) as run:
+            LocalExecutor().run(command, "localhost", "safe_readonly")
+
+        rewritten = run.call_args.args[0][3]
+        self.assertIn("--exclude=/mnt", rewritten)
+
 
 if __name__ == "__main__":
     unittest.main()
