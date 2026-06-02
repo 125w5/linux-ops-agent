@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import platform
+import shutil
 import subprocess
 import time
 
@@ -85,16 +86,7 @@ class LocalExecutor:
             return CommandResult(command, target, stdout, "", 0, duration_ms, risk_level)
 
         if platform.system().lower() != "linux":
-            duration_ms = int((time.perf_counter() - started) * 1000)
-            return CommandResult(
-                command=command,
-                target=target,
-                stdout="",
-                stderr="Local execution is intended for Linux. Re-run with --demo on this host.",
-                return_code=127,
-                duration_ms=duration_ms,
-                risk_level=risk_level,
-            )
+            return self._run_windows(command, target, risk_level, started)
 
         completed = subprocess.run(
             command,
@@ -114,3 +106,59 @@ class LocalExecutor:
             duration_ms=duration_ms,
             risk_level=risk_level,
         )
+
+    def _run_windows(self, command: str, target: str, risk_level: str, started: float) -> CommandResult:
+        if not shutil.which("wsl.exe"):
+            duration_ms = int((time.perf_counter() - started) * 1000)
+            return CommandResult(
+                command=command,
+                target=target,
+                stdout="",
+                stderr="WSL is not installed. Install Ubuntu with: wsl --install -d Ubuntu",
+                return_code=127,
+                duration_ms=duration_ms,
+                risk_level=risk_level,
+            )
+        try:
+            completed = subprocess.run(
+                ["wsl.exe", "bash", "-lc", command],
+                capture_output=True,
+                timeout=self.timeout_seconds,
+            )
+            stdout = _decode_process_output(completed.stdout)
+            stderr = _decode_process_output(completed.stderr)
+            if completed.returncode != 0 and _looks_like_wsl_setup_output(stdout + stderr):
+                stdout = ""
+                stderr = "WSL is not ready yet. Restart Windows to finish WSL installation. If it still fails after reboot, run: wsl --install -d Ubuntu."
+            return_code = completed.returncode
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            stdout = ""
+            stderr = f"WSL command failed: {exc}"
+            return_code = 127
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        return CommandResult(
+            command=command,
+            target=target,
+            stdout=stdout,
+            stderr=stderr,
+            return_code=return_code,
+            duration_ms=duration_ms,
+            risk_level=risk_level,
+        )
+
+
+def _decode_process_output(data: bytes | str | None) -> str:
+    if data is None:
+        return ""
+    if isinstance(data, str):
+        return data
+    if b"\x00" in data[:200]:
+        return data.decode("utf-16-le", errors="replace")
+    return data.decode("utf-8", errors="replace")
+
+
+def _looks_like_wsl_setup_output(text: str) -> bool:
+    lowered = text.lower()
+    return "wsl_e_wsl_optional_component_required" in lowered or (
+        "wsl.exe" in lowered and "--install" in lowered and ("ubuntu" in lowered or "distribution" in lowered)
+    )
