@@ -194,7 +194,9 @@ class EngineMethods:
         session = self.sessions.get(params.get("session_id"))
         text = str(params.get("input") or session.user_input or session.task)
         session.user_input = text
-        session.task = infer_task(text, session.task)
+        explicit_task = params.get("task")
+        task_hint = str(explicit_task) if explicit_task else None
+        session.task = infer_task(text, task_hint)
         session.current_plan = build_plan(text, session.target, session.task, registry=build_default_registry(), service=session.service)
         payload = {
             "session_id": session.session_id,

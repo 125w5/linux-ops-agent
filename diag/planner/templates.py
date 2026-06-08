@@ -41,7 +41,7 @@ RUNBOOKS: dict[str, list[DiagnosisStep]] = {
         DiagnosisStep("check_service_logs", "Read recent nginx logs", "journalctl -u nginx -n 50"),
         DiagnosisStep("check_ports", "Check listening ports", "ss -tulnp"),
     ],
-    "ssh": [
+    "ssh-failure": [
         DiagnosisStep(
             "check_failed_password",
             "Collect failed SSH login records",
@@ -54,6 +54,8 @@ RUNBOOKS: dict[str, list[DiagnosisStep]] = {
         ),
     ],
 }
+
+RUNBOOKS["ssh"] = RUNBOOKS["ssh-failure"]
 
 
 def get_runbook(task_type: str, registry: ToolRegistry | None = None, service: str = "nginx") -> list[DiagnosisStep]:

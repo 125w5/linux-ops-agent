@@ -80,7 +80,8 @@ class WorkbenchController:
         if text is not None:
             self.state.user_input = text
         user_input = self.state.user_input or self.state.task_type
-        self.state.task_type = infer_task(user_input, self.state.task_type)
+        task_hint = self.state.task_type if text is None else None
+        self.state.task_type = infer_task(user_input, task_hint)
         registry = build_default_registry()
         self.state.current_plan = build_plan(user_input, self.state.target, self.state.task_type, registry=registry, service=self.state.service)
         self.state.dashboard.apply(

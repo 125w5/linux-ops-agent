@@ -2,10 +2,27 @@ from __future__ import annotations
 
 
 TASK_ALIASES = {
-    "disk": ("disk", "space", "full", "du", "df", "磁盘", "空间", "满", "容量"),
-    "cpu": ("cpu", "load", "slow", "卡", "负载", "高占用"),
-    "service": ("service", "systemctl", "nginx", "failed", "启动", "服务"),
-    "ssh-failure": ("ssh", "ssh-failure", "login", "auth", "password", "登录", "暴力", "失败"),
+    "ssh-failure": (
+        "ssh",
+        "ssh-failure",
+        "sshd",
+        "auth",
+        "auth.log",
+        "login",
+        "failed password",
+        "invalid user",
+        "password",
+        "登录失败",
+        "登陆失败",
+        "认证失败",
+        "密码失败",
+        "ssh失败",
+        "暴力",
+        "爆破",
+    ),
+    "disk": ("disk", "space", "full", "du", "df", "filesystem", "磁盘", "空间", "满", "容量", "硬盘"),
+    "cpu": ("cpu", "load", "slow", "processor", "卡", "负载", "高占用", "处理器"),
+    "service": ("service", "systemctl", "nginx", "failed", "启动", "服务", "端口", "systemd"),
 }
 
 
