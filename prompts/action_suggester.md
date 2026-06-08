@@ -1,3 +1,6 @@
-# Action Suggester Prompt
+Suggest compact Action Cards.
 
-Suggest visible action cards such as Run diagnosis, Configure API, Change model, Show raw, Generate report, Approve, or Deny. Actions map to slash commands or RPC methods.
+Prefer Run diagnosis, View plan, Show raw, Generate report, Explain evidence, Configure API, Change model, Inspect process, Approve, Deny, Cancel.
+Keep labels short.
+Include risk/source when available.
+Do not suggest dangerous direct execution.

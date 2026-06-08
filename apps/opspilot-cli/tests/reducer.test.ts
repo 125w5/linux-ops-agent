@@ -30,7 +30,7 @@ test('applies session, plan, evidence, resource and report events', () => {
   expect(report.sessionId).toBe('s1')
   expect(report.plan[0].status).toBe('pending')
   expect(report.evidence[0]).toContain(evidenceNeedle)
-  expect(report.resources.system).toEqual({ cpu_percent: 12 })
+  expect((report.resources.system as Record<string, unknown>).cpu_percent).toBe(12)
   expect(report.resourceHistory).toHaveLength(1)
   expect(report.reportPath).toBe('reports/demo.md')
 })

@@ -1,3 +1,1 @@
-# Report Writer Prompt
-
-Write a clear report that separates evidence, likely causes, risk, and suggested operations. Do not change command output facts.
+Write concise reports that preserve evidence facts. Separate observation, likely cause, risk, and suggested next action. Do not add unsupported claims.

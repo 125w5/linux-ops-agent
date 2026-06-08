@@ -62,6 +62,7 @@ class AgentLoop:
         stage: StageCallback | None = None,
         event_callback: EventCallback | None = None,
         approval_provider: ApprovalProvider | None = None,
+        sandbox_profile: str = "safe-read",
     ) -> DiagnosisOutcome:
         stage = stage or (lambda _index, _total, _message: None)
         emit = event_callback or (lambda _event_type, _payload: None)
@@ -105,7 +106,7 @@ class AgentLoop:
             session=session,
             transcript=transcript,
             registry=registry,
-            permission_policy=PermissionPolicy(permission_mode, approval_provider=approval_provider),
+            permission_policy=PermissionPolicy(permission_mode, approval_provider=approval_provider, sandbox_profile=sandbox_profile),
             hook_manager=hook_manager,
             executor=executor,
             command_tool=CommandTool(executor),
@@ -135,9 +136,20 @@ class AgentLoop:
                     {"role": label, "estimated_tokens": estimate_tokens(text), "max_tokens": router.config.max_tokens},
                 )
             usage.ai_calls += 1
-            return fn(limited_text)
+            started_api = profiler.elapsed_ms()
+            result = fn(limited_text)
+            usage.api_latency_ms += max(0, profiler.elapsed_ms() - started_api)
+            return result
 
-        transcript.append_event("ai_planner_skipped", {"reason": "deterministic plan builder drives command selection"})
+        if permission_mode == PermissionMode.DEMO:
+            transcript.append_event("ai_planner_skipped", {"reason": "demo mode uses deterministic planning"})
+        else:
+            try:
+                planner_result = call_ai("planner", user_input, lambda text: router.planner(text, [tool.name for tool in registry.list()]))
+                transcript.append_event("ai_planner", {"result": planner_result})
+            except Exception as exc:
+                usage.fallback_reason = "planner_error"
+                transcript.append_event("ai_planner_error", {"error": str(exc)})
         plan = build_plan(user_input, target, task_type, registry=registry, service=service)
         transcript.append_plan(plan)
         emit(
@@ -253,17 +265,8 @@ class AgentLoop:
         outcome.risk_level = risk_level
         transcript.append_evidence(evidence)
         emit("EvidenceAdded", {"items": [item.to_dict() for item in evidence]})
-        try:
-            evidence_text = str([item.to_dict() for item in evidence])
-            summary = call_ai("summarizer", evidence_text, lambda text: router.summarizer([{"summary_input": text}]))
-            transcript.append_event("ai_summarizer", {"summary": summary})
-        except Exception as exc:
-            transcript.append_event("ai_summarizer_error", {"error": str(exc)})
-        try:
-            risk_note = call_ai("risk_reviewer", "session command set", lambda text: router.risk_reviewer(text, outcome.risk_level))
-            transcript.append_event("ai_risk_reviewer", {"note": risk_note})
-        except Exception as exc:
-            transcript.append_event("ai_risk_reviewer_error", {"error": str(exc)})
+        transcript.append_event("ai_summarizer_skipped", {"reason": "local run summary is nonblocking"})
+        transcript.append_event("ai_risk_reviewer_skipped", {"reason": "risk is derived from safety policy and evidence"})
 
         stage(5, 6, "Write reports and transcript")
         session.close()
@@ -274,12 +277,7 @@ class AgentLoop:
         outcome.json_path = str(json_path)
         transcript.append_report_path(outcome.markdown_path, outcome.json_path)
         emit("ReportWritten", {"markdown_path": outcome.markdown_path, "json_path": outcome.json_path})
-        try:
-            report_input = f"risk={outcome.risk_level}; causes={outcome.root_causes}; suggestions={outcome.suggestions}"
-            polished = call_ai("report_writer", report_input, lambda text: router.report_writer(text))
-            transcript.append_event("ai_report_writer", {"note": polished})
-        except Exception as exc:
-            transcript.append_event("ai_report_writer_error", {"error": str(exc)})
+        transcript.append_event("ai_report_writer_skipped", {"reason": "report writer is optional and nonblocking"})
         usage.duration_ms = profiler.elapsed_ms()
         outcome.resource_usage = usage.to_dict()
         transcript.append_event("resource_usage", usage.to_dict())

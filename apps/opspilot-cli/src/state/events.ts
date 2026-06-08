@@ -12,6 +12,9 @@ export type Message = {
 export type ActionCard = {
   label: string
   command: string
+  source?: string
+  risk?: string
+  shortcut?: string
 }
 
 export type PlanStep = {

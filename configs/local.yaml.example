@@ -4,6 +4,6 @@ providers:
   default: deepseek
   deepseek:
     type: openai-compatible
-    model: deepseek-v4-flash
-    base_url: https://api.deepseek.com
+    model: deepseekv4
+    base_url: https://api.deepseek.com/v1
     api_key_env: DEEPSEEK_API_KEY

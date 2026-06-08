@@ -8,6 +8,7 @@ from diag.ai.doctor import doctor_provider, list_models
 from diag.cli.output import stage
 from diag.dashboard.live_dashboard import LiveDashboard, render_command_discovery
 from diag.engine.rpc_server import RpcServer
+from diag.engine.smoke import run_engine_smoke
 from diag.interactive.repl import run_interactive_repl
 from diag.interactive.session_state import InteractiveSessionState
 from diag.observability.audit_view import render_audit
@@ -330,6 +331,10 @@ def run_health(_: argparse.Namespace) -> int:
 
 
 def run_engine(args: argparse.Namespace) -> int:
+    if getattr(args, "smoke", False):
+        ok, text = run_engine_smoke()
+        print(text)
+        return 0 if ok else 1
     if args.stdio:
         return RpcServer().serve()
     print("Use `python -m diag engine --stdio` to start the JSON-RPC engine.")
@@ -519,6 +524,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     engine = subparsers.add_parser("engine", help="Start JSON-RPC diagnosis engine")
     engine.add_argument("--stdio", action="store_true", help="Use JSON lines over stdin/stdout")
+    engine.add_argument("--smoke", action="store_true", help="Run engine handshake and telemetry smoke test")
     engine.set_defaults(func=run_engine)
 
     model = subparsers.add_parser("model", help="Inspect model providers")

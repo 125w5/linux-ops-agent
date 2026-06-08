@@ -9,5 +9,8 @@ export type StartAppOptions = {
 }
 
 export function startApp(options: StartAppOptions = {}): void {
-  render(<MainScreen initialState={initialState} target={options.target ?? 'localhost'} mode={options.mode ?? 'readonly'} />)
+  const instance = render(<MainScreen initialState={initialState} target={options.target ?? 'localhost'} mode={options.mode ?? 'readonly'} />)
+  if (!process.stdin.isTTY) {
+    setTimeout(() => instance.unmount(), 5000)
+  }
 }

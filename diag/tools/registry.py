@@ -30,6 +30,8 @@ class ToolRegistry:
 def build_default_registry() -> ToolRegistry:
     from diag.tools.cpu_tools import register_cpu_tools
     from diag.tools.disk_tools import register_disk_tools
+    from diag.tools.ops_tools import register_ops_tools
+    from diag.tools.process_tools import register_process_tools
     from diag.tools.service_tools import register_service_tools
     from diag.tools.ssh_log_tools import register_ssh_log_tools
 
@@ -38,4 +40,6 @@ def build_default_registry() -> ToolRegistry:
     register_cpu_tools(registry)
     register_service_tools(registry)
     register_ssh_log_tools(registry)
+    register_ops_tools(registry)
+    register_process_tools(registry)
     return registry

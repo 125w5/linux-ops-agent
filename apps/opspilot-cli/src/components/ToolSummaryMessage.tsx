@@ -1,6 +1,14 @@
 import React from 'react'
-import { Text } from 'ink'
+import { Box, Text } from 'ink'
 
 export function ToolSummaryMessage({ name, status }: { name: string; status: string }): React.ReactElement {
-  return <Text><Text color="yellow">tool</Text>  {name} {'->'} {status}</Text>
+  return <Box>
+    <Box marginRight={1}>
+      <Text color="yellow">tool</Text>
+    </Box>
+    <Box marginRight={1}>
+      <Text>{name}</Text>
+    </Box>
+    <Text color="gray">{status}</Text>
+  </Box>
 }

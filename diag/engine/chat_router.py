@@ -18,9 +18,9 @@ def route_chat(text: str) -> ChatRoute:
         return ChatRoute("greeting", "greeting only")
     if _has_any(normalized, ["配置 api", "配置api", "api key", "apikey", "openai", "anthropic", "deepseek", "gemini", "base_url", "base url", "本地模型", "离线模型", "ol" + "lama"]):
         return ChatRoute("api_config", "api configuration request")
-    if _has_any(normalized, ["模型", "model", "/model", "provider"]):
+    if _has_any(normalized, ["模型", "换模型", "model", "/model", "provider"]):
         return ChatRoute("model_config", "model/provider request")
-    if normalized.startswith("/run") or _has_any(normalized, ["执行", "运行一下", "跑一下", "开始诊断", "run", "execute"]):
+    if normalized.startswith("/run") or _has_any(normalized, ["执行", "运行", "开始诊断", "run", "execute"]):
         return ChatRoute("execute_request", "execution request")
     if normalized.startswith("/raw") or _has_any(normalized, ["原始输出", "raw output", "show raw"]):
         return ChatRoute("raw_request", "raw output request")
@@ -32,7 +32,7 @@ def route_chat(text: str) -> ChatRoute:
         return ChatRoute("evidence_question", "explanation request")
     if _has_any(normalized, ["证据", "刚才", "上次", "能删吗", "能不能删", "/proc/kcore", "evidence", "why"]):
         return ChatRoute("evidence_question", "question about evidence or safety")
-    if _has_any(normalized, ["磁盘", "cpu", "内存", "服务", "ssh", "nginx", "故障", "异常", "是不是有问题", "变慢", "满了", "disk", "service"]):
+    if _has_any(normalized, ["磁盘", "cpu", "内存", "进程", "服务", "端口", "日志", "ssh", "nginx", "docker", "systemd", "mysql", "故障", "异常", "是不是有问题", "变慢", "满了", "disk", "service", "memory", "process"]):
         return ChatRoute("fault_description", "fault description")
     return ChatRoute("unknown", "not enough diagnostic intent")
 

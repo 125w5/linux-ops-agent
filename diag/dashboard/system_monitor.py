@@ -21,13 +21,13 @@ class SystemMonitor:
             snapshot = sample_resources()
         except Exception as exc:
             snapshot = {"system_monitor_error": str(exc)}
-        self.last_snapshot = snapshot
+        self.last_snapshot = _stable_snapshot(snapshot)
         if self.on_sample:
             try:
-                self.on_sample(snapshot)
+                self.on_sample(self.last_snapshot)
             except Exception:
                 pass
-        return snapshot
+        return self.last_snapshot
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -52,3 +52,10 @@ class SystemMonitor:
 
     def __exit__(self, *_exc: object) -> None:
         self.stop()
+
+
+def _stable_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    system = snapshot.get("system")
+    if isinstance(system, dict) and isinstance(system.get("cpu_percent"), (int, float)):
+        system["cpu_percent"] = max(0.0, min(100.0, float(system["cpu_percent"])))
+    return snapshot

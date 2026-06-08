@@ -1,0 +1,1 @@
+nginx: configuration file /etc/nginx/nginx.conf test is successful

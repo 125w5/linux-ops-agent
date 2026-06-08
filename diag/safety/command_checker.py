@@ -18,6 +18,7 @@ READONLY_ALLOW = {
     "journalctl",
     "man",
     "ps",
+    "pstree",
     "sort",
     "ss",
     "systemctl",
@@ -29,8 +30,12 @@ READONLY_ALLOW = {
     "docker",
 }
 
+LOW_RISK_ALLOW = {
+    "nginx -t",
+    "systemctl cat",
+}
+
 DANGEROUS_PATTERNS = (
-    "rm ",
     "rm -",
     "mkfs",
     " dd ",
@@ -46,8 +51,13 @@ DANGEROUS_PATTERNS = (
     "systemctl start",
     "docker system prune",
     "journalctl --vacuum",
-    "kill ",
     "userdel",
+)
+
+BLOCKED_KILL_PATTERNS = (
+    "kill -9",
+    "kill -kill",
+    "kill -sigkill",
 )
 
 
@@ -73,11 +83,29 @@ def _first_token(segment: str) -> str:
     return tokens[0]
 
 
+def _is_low_risk_command(command: str) -> bool:
+    segments = _segments(command)
+    if len(segments) != 1:
+        return False
+    normalized = segments[0].strip().lower()
+    return any(normalized == pattern or normalized.startswith(pattern + " ") for pattern in LOW_RISK_ALLOW)
+
+
 def check_command(command: str) -> SafetyDecision:
     normalized = f" {command.strip().lower()} "
+    if any(token == "rm" for token in (_first_token(segment) for segment in _segments(command))):
+        return SafetyDecision(False, RiskLevel.BLOCKED, "Blocked dangerous command: rm")
     for pattern in DANGEROUS_PATTERNS:
         if pattern in normalized:
             return SafetyDecision(False, RiskLevel.BLOCKED, f"Blocked dangerous pattern: {pattern.strip()}")
+    for pattern in BLOCKED_KILL_PATTERNS:
+        if pattern in normalized:
+            return SafetyDecision(False, RiskLevel.BLOCKED, "Blocked SIGKILL command")
+
+    if _is_low_risk_command(command):
+        return SafetyDecision(True, RiskLevel.LOW_RISK, "Low-risk validation/read command")
+    if normalized.startswith(" kill -15 ") or normalized.startswith(" kill -term "):
+        return SafetyDecision(True, RiskLevel.LOW_RISK, "Process termination requires confirmation")
 
     first_tokens = [_first_token(segment) for segment in _segments(command)]
     if first_tokens and all(token in READONLY_ALLOW for token in first_tokens):

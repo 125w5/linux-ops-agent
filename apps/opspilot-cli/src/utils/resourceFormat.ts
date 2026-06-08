@@ -1,6 +1,10 @@
+import { cpus } from 'node:os'
+
 export type ProcessRow = {
+  pid?: string | number
   name: string
   cpuPercent?: number
+  rawCpuPercent?: number
   memoryMb?: number
 }
 
@@ -56,16 +60,21 @@ export function diskLabel(disk: Record<string, unknown>): string {
   return `${mount} ${formatGb(used)} / ${formatGb(total)}`
 }
 
-export function processRows(processes: unknown, totalMemoryGb?: number): ProcessRow[] {
+export function processRows(processes: unknown, totalMemoryGb?: number, logicalCpuCount = cpus().length || 1): ProcessRow[] {
   if (!Array.isArray(processes)) {
     return []
   }
   return processes.slice(0, 3).map(item => {
     const row = readObject(item)
-    const memoryMb = numberValue(row.memory_mb) ?? memoryMbFromPercent(row.memory_percent, totalMemoryGb)
+    const memoryMb = numberValue(row.memory_mb) ?? bytesToMb(row.memory_bytes) ?? memoryMbFromPercent(row.memory_percent, totalMemoryGb)
+    const rawCpu = numberValue(row.raw_cpu_percent) ?? numberValue(row.cpu_percent)
+    const normalizedCpu = numberValue(row.normalized_cpu_percent) ?? numberValue(row.process_normalized_cpu_percent)
+    const rowCpuCount = numberValue(row.logical_cpu_count) ?? logicalCpuCount
     return {
-      name: String(row.name ?? '?'),
-      cpuPercent: numberValue(row.cpu_percent),
+      pid: typeof row.pid === 'string' || typeof row.pid === 'number' ? row.pid : undefined,
+      name: truncate(String(row.name ?? '?'), 18),
+      rawCpuPercent: rawCpu,
+      cpuPercent: normalizedCpu ?? normalizeProcessCpu(rawCpu, rowCpuCount),
       memoryMb,
     }
   })
@@ -82,7 +91,14 @@ export function sparkline(values: unknown[], width = 12): string {
 }
 
 export function formatProcessCpu(row: ProcessRow): string {
-  return row.cpuPercent === undefined ? 'n/a' : `${row.cpuPercent.toFixed(1)}%`
+  if (row.cpuPercent === undefined) {
+    return 'n/a'
+  }
+  const normalized = `${row.cpuPercent.toFixed(1)}%`
+  if (row.rawCpuPercent !== undefined && Math.abs(row.rawCpuPercent - row.cpuPercent) > 0.1) {
+    return `${normalized}/${row.rawCpuPercent.toFixed(0)}% raw`
+  }
+  return normalized
 }
 
 export function formatProcessMem(row: ProcessRow): string {
@@ -97,6 +113,11 @@ function memoryMbFromPercent(value: unknown, totalMemoryGb?: number): number | u
   return totalMemoryGb * 1024 * percent / 100
 }
 
+function bytesToMb(value: unknown): number | undefined {
+  const bytes = numberValue(value)
+  return bytes === undefined ? undefined : bytes / 1024 / 1024
+}
+
 function formatGb(value: number): string {
   return `${value.toFixed(value >= 10 ? 0 : 1)}G`
 }
@@ -107,4 +128,18 @@ function clampPercent(value: number | undefined): number | undefined {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+function normalizeProcessCpu(value: number | undefined, logicalCpuCount: number): number | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (value <= 100) {
+    return clamp(value, 0, 100)
+  }
+  return clamp(value / Math.max(1, logicalCpuCount), 0, 100)
+}
+
+function truncate(value: string, maxLength: number): string {
+  return value.length <= maxLength ? value : `${value.slice(0, Math.max(0, maxLength - 3))}...`
 }

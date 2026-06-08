@@ -1,0 +1,10 @@
+sandbox_profiles:
+  default: safe-read
+  safe-read:
+    description: Only safe read-only observation commands.
+  ops-read:
+    description: Allow service config reads, logs, docker state, nginx -t, and systemctl cat.
+  lab-write:
+    description: Low-risk writes only inside Docker fault-lab or sandbox workflows.
+  admin-confirm:
+    description: Ask before real low-risk operations; dangerous operations stay blocked.

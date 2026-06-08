@@ -1,108 +1,63 @@
 import React from 'react'
 import { Box, Text } from 'ink'
 import type { AppState } from '../state/appState.js'
-import type { PlanStep } from '../state/events.js'
+import type { Viewport } from '../layout/viewport.js'
+import { currentViewport } from '../layout/viewport.js'
 import { ActionBar } from './ActionBar.js'
 import { ConversationPane } from './ConversationPane.js'
 import { InputBox } from './InputBox.js'
 import { MonitorPane } from './MonitorPane.js'
+import { SidePanel } from './SidePanel.js'
+import { WorkbenchLayout } from './WorkbenchLayout.js'
+import { EngineErrorPanel } from './EngineErrorPanel.js'
 
-const WIDTH = 78
+export function AppShell({
+  state,
+  input,
+  selectedActionIndex,
+  searchTerm,
+  viewport = currentViewport(),
+}: {
+  state: AppState
+  input: string
+  selectedActionIndex: number
+  searchTerm: string
+  viewport?: Viewport
+}): React.ReactElement {
+  const sideVisible = viewport.showSidePanel && state.sidePanelVisible
+  const conversationWidth = sideVisible ? viewport.conversationWidth : viewport.width - 2
 
-export function AppShell({ state, input }: { state: AppState; input: string }): React.ReactElement {
-  return <Box flexDirection="column">
-    <Box borderStyle="round" borderColor="cyan" flexDirection="column" width={WIDTH}>
-      <Box paddingX={1} flexDirection="column">
-        <Text color="cyan" bold>OpsPilot-Linux</Text>
-        <Text>{statusText(state)}</Text>
+  return <WorkbenchLayout
+    viewport={viewport}
+    header={<Header state={state} />}
+    monitor={<Box paddingX={1} height={viewport.monitorHeight} overflow="hidden"><MonitorPane resources={state.resources} history={state.resourceHistory} compact /></Box>}
+    body={<Box height={viewport.bodyHeight} paddingX={1}>
+      <Box flexDirection="column" width={conversationWidth} height={viewport.bodyHeight}>
+        <EngineErrorPanel engine={state.engine} />
+        <ConversationPane messages={state.messages} searchTerm={searchTerm} scroll={state.scroll} height={viewport.bodyHeight} width={conversationWidth} />
       </Box>
-
-      <Section title="Monitor">
-        <MonitorPane resources={state.resources} history={state.resourceHistory} />
-      </Section>
-
-      <Section title="Conversation">
-        <ConversationPane messages={state.messages} />
-      </Section>
-
-      <Box flexDirection="row">
-        <Box flexDirection="column" width={38}>
-          <Section title="Plan / Tools">
-            {planLines(state.plan).map((line, index) => <Text key={index}>{line}</Text>)}
-          </Section>
-        </Box>
-        <Box flexDirection="column" width={38}>
-          <Section title="Evidence / Report">
-            {evidenceLines(state).map((line, index) => <Text key={index}>{line}</Text>)}
-          </Section>
-        </Box>
-      </Box>
-
-      <Box flexDirection="row">
-        <Box flexDirection="column" width={38}>
-          <Section title={`Raw ${state.rawExpanded ? 'expanded' : 'folded'}`}>
-            <Text>{state.rawExpanded ? 'raw stream visible when engine provides it' : 'use /raw to expand'}</Text>
-          </Section>
-        </Box>
-        <Box flexDirection="column" width={38}>
-          <Section title="Resources">
-            <Text>{resourceText(state)}</Text>
-          </Section>
-        </Box>
-      </Box>
-      <Box paddingX={1}>
-        <ActionBar actions={state.actions} />
-      </Box>
-    </Box>
-    <InputBox value={input} />
-  </Box>
+      {sideVisible ? <Box flexDirection="column" width={viewport.sideWidth} height={viewport.bodyHeight} marginLeft={1}>
+        <SidePanel state={state} height={viewport.bodyHeight} width={viewport.sideWidth} />
+      </Box> : null}
+    </Box>}
+    actions={<Box paddingX={1} height={viewport.actionHeight}><ActionBar actions={state.actions} selectedIndex={selectedActionIndex} /></Box>}
+    input={<Box paddingX={1}><InputBox value={input} /></Box>}
+  />
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }): React.ReactElement {
-  return <Box borderStyle="single" borderColor="gray" flexDirection="column" paddingX={1}>
-    <Text color="gray">{title}</Text>
-    {children}
+function Header({ state }: { state: AppState }): React.ReactElement {
+  return <Box paddingX={1}>
+    <Box marginRight={1}>
+      <Text color="cyan" bold>OpsPilot-Linux</Text>
+    </Box>
+    <Text>{statusText(state)}</Text>
   </Box>
 }
 
 function statusText(state: AppState): string {
-  return `session=${shortSession(state.sessionId)}  mode=${state.mode}  model=${state.model || 'default'}  risk=${state.risk}`
-}
-
-function planLines(plan: PlanStep[]): string[] {
-  if (!plan.length) {
-    return ['waiting for your description']
-  }
-  return plan.slice(0, 6).map((step, index) => `${index + 1} ${(step.status ?? 'pending').padEnd(8)} ${step.id}`)
-}
-
-function evidenceLines(state: AppState): string[] {
-  const evidence = state.evidence.slice(0, 4)
-  if (!evidence.length && !state.reportPath) {
-    return ['waiting']
-  }
-  const lines = evidence.length ? evidence.map(item => trim(item, 34)) : ['waiting']
-  if (state.reportPath) {
-    lines.push(`report ${trim(state.reportPath, 28)}`)
-  }
-  return lines
-}
-
-function resourceText(state: AppState): string {
-  const commands = readObject(state.resources.commands)
-  const ai = readObject(state.resources.ai)
-  const output = readObject(state.resources.output)
-  return `commands=${commands.executed ?? commands.count ?? 0} ai=${ai.calls ?? ai.count ?? 0} out=${output.kb ?? output.bytes ?? 0}KB`
-}
-
-function readObject(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' ? value as Record<string, unknown> : {}
+  return `engine=${state.engine.status} session=${shortSession(state.sessionId)} mode=${state.mode} sandbox=${state.sandboxProfile} panel=${state.activePanel} model=${state.model || 'default'}`
 }
 
 function shortSession(sessionId: string): string {
   return sessionId ? sessionId.slice(0, 8) : 'pending'
-}
-
-function trim(value: string, max: number): string {
-  return value.length > max ? `${value.slice(0, max - 1)}…` : value
 }

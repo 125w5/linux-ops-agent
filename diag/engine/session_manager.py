@@ -5,6 +5,8 @@ from typing import Any
 from uuid import uuid4
 
 from diag.core.models import DiagnosisOutcome, DiagnosisPlan, utc_now
+from diag.dashboard.resource_sampler import ProcessSampler
+from diag.engine.latency_trace import empty_latency_trace
 from diag.permissions.mode import PermissionMode, parse_permission_mode
 
 
@@ -25,6 +27,21 @@ class EngineSession:
     evidence: list[dict[str, Any]] = field(default_factory=list)
     messages: list[dict[str, Any]] = field(default_factory=list)
     config_flow: dict[str, Any] = field(default_factory=dict)
+    sandbox_profile: str = "safe-read"
+    fast_mode: bool = False
+    api_calls: int = 0
+    api_latency_ms: int = 0
+    fallback_reason: str = ""
+    estimated_tokens: int = 0
+    commands_executed: int = 0
+    output_bytes: int = 0
+    last_latency_ms: int = 0
+    resource_sampler: ProcessSampler = field(default_factory=ProcessSampler)
+    last_resource_snapshot: dict[str, Any] = field(default_factory=dict)
+    frontend_resource_received: bool = False
+    responding: bool = False
+    cancelled_generation: int = 0
+    latency_trace: dict[str, Any] = field(default_factory=empty_latency_trace)
     started_at: str = field(default_factory=utc_now)
 
 
@@ -44,6 +61,7 @@ class EngineSessionManager:
             model=params.get("model"),
             profile=params.get("profile"),
             style=params.get("style"),
+            sandbox_profile=str(params.get("sandbox_profile") or "safe-read"),
         )
         self.sessions[session.session_id] = session
         self.current_id = session.session_id

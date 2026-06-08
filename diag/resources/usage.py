@@ -13,7 +13,9 @@ class ResourceUsage:
     total_output_bytes: int = 0
     truncated_results: int = 0
     ai_calls: int = 0
+    api_latency_ms: int = 0
+    fallback_reason: str = ""
     duration_ms: int = 0
 
-    def to_dict(self) -> dict[str, int]:
+    def to_dict(self) -> dict[str, int | str]:
         return asdict(self)

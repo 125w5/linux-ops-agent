@@ -1,13 +1,123 @@
 from __future__ import annotations
 
 import os
+import platform
 import shutil
 import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Any
 
+_SAMPLER: "ProcessSampler | None" = None
+
 
 def sample_resources() -> dict[str, Any]:
+    global _SAMPLER
+    if _SAMPLER is None:
+        _SAMPLER = ProcessSampler()
+    return _SAMPLER.sample()
+
+
+class ProcessSampler:
+    def __init__(self) -> None:
+        self.warmed_up = False
+        self.last_sample_at: float | None = None
+
+    def sample(self) -> dict[str, Any]:
+        try:
+            return self._sample_psutil()
+        except Exception as exc:
+            return _error_sample(exc)
+
+    def _sample_psutil(self) -> dict[str, Any]:
+        import psutil  # type: ignore
+
+        logical_cpu_count = max(1, int(psutil.cpu_count(logical=True) or os.cpu_count() or 1))
+        cpu_percent = _clamp_percent(float(psutil.cpu_percent(interval=None)))
+        load_avg = list(os.getloadavg()) if hasattr(os, "getloadavg") else []
+        memory = psutil.virtual_memory()
+        disk_path = _disk_sample_path()
+        disk = psutil.disk_usage(disk_path)
+        processes: list[dict[str, Any]] = []
+        permission_denied = 0
+        for proc in psutil.process_iter(["pid", "name", "memory_info", "memory_percent"]):
+            try:
+                try:
+                    raw_cpu = float(proc.cpu_percent(interval=None) or 0)
+                except (psutil.AccessDenied, PermissionError):
+                    permission_denied += 1
+                    raw_cpu = 0.0
+                except Exception:
+                    raw_cpu = 0.0
+                info = proc.info
+                memory_info = info.get("memory_info")
+                memory_bytes = int(getattr(memory_info, "rss", 0) or 0)
+                memory_percent = float(info.get("memory_percent") or 0)
+                row = _process_row(
+                    pid=int(info.get("pid") or proc.pid),
+                    name=str(info.get("name") or "?"),
+                    user="",
+                    command="",
+                    raw_cpu_percent=raw_cpu,
+                    logical_cpu_count=logical_cpu_count,
+                    memory_bytes=memory_bytes,
+                    memory_percent=memory_percent,
+                )
+                if not _is_system_placeholder_process(row):
+                    processes.append(row)
+            except (psutil.AccessDenied, PermissionError):
+                permission_denied += 1
+                continue
+            except Exception:
+                continue
+
+        now = time.time()
+        status = "ready" if self.warmed_up else "warming_up"
+        self.warmed_up = True
+        self.last_sample_at = now
+        ready_processes = processes
+        return {
+            "timestamp": now,
+            "platform": platform.platform(),
+            "python_version": sys.version.split()[0],
+            "python_executable": sys.executable,
+            "psutil_available": True,
+            "sampler_status": status,
+            "permission_denied_count": permission_denied,
+            "logical_cpu_count": logical_cpu_count,
+            "system_cpu_percent": cpu_percent,
+            "system": {
+                "cpu_percent": cpu_percent,
+                "system_cpu_percent": cpu_percent,
+                "logical_cpu_count": logical_cpu_count,
+                "sampler_status": status,
+                "load_average": load_avg,
+                "memory_used_gb": memory.used / (1024**3),
+                "memory_total_gb": memory.total / (1024**3),
+                "memory_bytes": int(memory.used),
+                "memory_total_bytes": int(memory.total),
+                "memory_percent": float(memory.percent),
+            },
+            "disk": {
+                "mountpoint": _display_mountpoint(disk_path),
+                "used_gb": disk.used / (1024**3),
+                "total_gb": disk.total / (1024**3),
+                "used_bytes": int(disk.used),
+                "total_bytes": int(disk.total),
+                "percent": float(disk.percent),
+            },
+            "top_cpu_processes": sorted(ready_processes, key=lambda item: item.get("process_normalized_cpu_percent", 0), reverse=True)[:3],
+            "top_memory_processes": sorted(ready_processes, key=lambda item: item.get("memory_bytes", 0), reverse=True)[:3],
+        }
+
+
+def reset_sampler_for_tests() -> None:
+    global _SAMPLER
+    _SAMPLER = None
+
+
+def legacy_sample_resources() -> dict[str, Any]:
     try:
         return _sample_psutil()
     except Exception:
@@ -17,7 +127,8 @@ def sample_resources() -> dict[str, Any]:
 def _sample_psutil() -> dict[str, Any]:
     import psutil  # type: ignore
 
-    cpu_percent = float(psutil.cpu_percent(interval=None))
+    logical_cpu_count = max(1, int(psutil.cpu_count(logical=True) or os.cpu_count() or 1))
+    cpu_percent = _clamp_percent(float(psutil.cpu_percent(interval=None)))
     load_avg = list(os.getloadavg()) if hasattr(os, "getloadavg") else []
     memory = psutil.virtual_memory()
     disk_path = _disk_sample_path()
@@ -32,13 +143,16 @@ def _sample_psutil() -> dict[str, Any]:
             {
                 "pid": info.get("pid"),
                 "name": info.get("name") or "?",
-                "cpu_percent": float(info.get("cpu_percent") or 0),
+                "raw_cpu_percent": float(info.get("cpu_percent") or 0),
+                "cpu_percent": _normalize_process_cpu(float(info.get("cpu_percent") or 0), logical_cpu_count),
+                "logical_cpu_count": logical_cpu_count,
                 "memory_percent": float(info.get("memory_percent") or 0),
             }
         )
     return {
         "system": {
             "cpu_percent": cpu_percent,
+            "logical_cpu_count": logical_cpu_count,
             "load_average": load_avg,
             "memory_used_gb": memory.used / (1024**3),
             "memory_total_gb": memory.total / (1024**3),
@@ -50,18 +164,42 @@ def _sample_psutil() -> dict[str, Any]:
             "total_gb": disk.total / (1024**3),
             "percent": float(disk.percent),
         },
-        "top_cpu_processes": sorted(processes, key=lambda item: item.get("cpu_percent", 0), reverse=True)[:5],
-        "top_memory_processes": sorted(processes, key=lambda item: item.get("memory_percent", 0), reverse=True)[:5],
+        "top_cpu_processes": sorted(processes, key=lambda item: item.get("cpu_percent", 0), reverse=True)[:3],
+        "top_memory_processes": sorted(processes, key=lambda item: item.get("memory_percent", 0), reverse=True)[:3],
     }
 
 
 def _sample_fallback() -> dict[str, Any]:
+    logical_cpu_count = max(1, int(os.cpu_count() or 1))
     return {
-        "system": _fallback_system(),
+        "timestamp": time.time(),
+        "platform": platform.platform(),
+        "python_version": sys.version.split()[0],
+        "python_executable": sys.executable,
+        "psutil_available": False,
+        "sampler_status": "error",
+        "sampler_error": "psutil missing",
+        "logical_cpu_count": logical_cpu_count,
+        "system": {**_fallback_system(), "logical_cpu_count": logical_cpu_count},
         "disk": _fallback_disk(),
-        "top_cpu_processes": _fallback_processes("-pcpu"),
-        "top_memory_processes": _fallback_processes("-pmem"),
+        "top_cpu_processes": _fallback_processes("-pcpu", logical_cpu_count),
+        "top_memory_processes": _fallback_processes("-pmem", logical_cpu_count),
     }
+
+
+def _error_sample(exc: Exception) -> dict[str, Any]:
+    if exc.__class__.__name__ == "ModuleNotFoundError" and "psutil" in str(exc):
+        error = "psutil missing"
+    else:
+        error = str(exc) or exc.__class__.__name__
+    snapshot = _sample_fallback()
+    has_data = bool(snapshot.get("top_cpu_processes") or snapshot.get("top_memory_processes") or snapshot.get("system"))
+    snapshot["sampler_status"] = "degraded" if has_data else "error"
+    snapshot["sampler_error"] = error
+    snapshot["fallback_active"] = has_data
+    snapshot.setdefault("system", {})["sampler_status"] = snapshot["sampler_status"]
+    snapshot.setdefault("system", {})["sampler_error"] = error
+    return snapshot
 
 
 def _fallback_system() -> dict[str, Any]:
@@ -146,9 +284,9 @@ def _display_mountpoint(path: str) -> str:
     return path
 
 
-def _fallback_processes(sort_key: str) -> list[dict[str, Any]]:
+def _fallback_processes(sort_key: str, logical_cpu_count: int) -> list[dict[str, Any]]:
     if os.name == "nt":
-        return _windows_processes(sort_key)
+        return _windows_processes(sort_key, logical_cpu_count)
     output = _run(["ps", "-eo", "pid,comm,pcpu,pmem", f"--sort={sort_key}"])
     rows: list[dict[str, Any]] = []
     if not output:
@@ -159,7 +297,8 @@ def _fallback_processes(sort_key: str) -> list[dict[str, Any]]:
             continue
         pid, name, cpu, mem = parts
         try:
-            rows.append({"pid": int(pid), "name": name, "cpu_percent": float(cpu), "memory_percent": float(mem)})
+            raw_cpu = float(cpu)
+            rows.append({"pid": int(pid), "name": name, "raw_cpu_percent": raw_cpu, "cpu_percent": _normalize_process_cpu(raw_cpu, logical_cpu_count), "logical_cpu_count": logical_cpu_count, "memory_percent": float(mem)})
         except ValueError:
             continue
     return rows
@@ -227,7 +366,7 @@ def _windows_cpu_percent() -> float | None:
     return None
 
 
-def _windows_processes(sort_key: str) -> list[dict[str, Any]]:
+def _windows_processes(sort_key: str, logical_cpu_count: int) -> list[dict[str, Any]]:
     sort_property = "WorkingSet64" if "mem" in sort_key.lower() else "CPU"
     command = (
         "Get-Process | Sort-Object "
@@ -246,13 +385,66 @@ def _windows_processes(sort_key: str) -> list[dict[str, Any]]:
     processes: list[dict[str, Any]] = []
     for row in rows:
         working_set = float(row.get("WorkingSet64") or 0)
+        raw_cpu = float(row.get("CPU") or 0)
         processes.append(
             {
                 "pid": row.get("Id"),
                 "name": row.get("ProcessName") or "?",
-                "cpu_percent": float(row.get("CPU") or 0),
+                "raw_cpu_percent": raw_cpu,
+                "cpu_percent": _normalize_process_cpu(raw_cpu, logical_cpu_count),
+                "logical_cpu_count": logical_cpu_count,
                 "memory_percent": 0.0,
                 "memory_mb": working_set / (1024**2),
             }
         )
     return processes
+
+
+def _process_row(
+    *,
+    pid: int,
+    name: str,
+    user: str,
+    command: str,
+    raw_cpu_percent: float,
+    logical_cpu_count: int,
+    memory_bytes: int,
+    memory_percent: float,
+) -> dict[str, Any]:
+    normalized = _normalize_process_cpu(raw_cpu_percent, logical_cpu_count)
+    return {
+        "pid": pid,
+        "name": name,
+        "user": user,
+        "command": command,
+        "raw_cpu_percent": raw_cpu_percent,
+        "normalized_cpu_percent": normalized,
+        "cpu_percent": normalized,
+        "process_normalized_cpu_percent": normalized,
+        "logical_cpu_count": logical_cpu_count,
+        "memory_bytes": memory_bytes,
+        "memory_mb": memory_bytes / (1024**2),
+        "memory_percent": memory_percent,
+    }
+
+
+def _cmdline_text(value: Any) -> str:
+    if isinstance(value, (list, tuple)):
+        return " ".join(str(item) for item in value)
+    return str(value or "")
+
+
+def _is_system_placeholder_process(row: dict[str, Any]) -> bool:
+    name = str(row.get("name") or "").lower()
+    pid = int(row.get("pid") or 0)
+    return pid in {0, 4} or name in {"system idle process", "system"}
+
+
+def _normalize_process_cpu(raw_percent: float, logical_cpu_count: int) -> float:
+    if raw_percent <= 100:
+        return _clamp_percent(raw_percent)
+    return _clamp_percent(raw_percent / max(1, logical_cpu_count))
+
+
+def _clamp_percent(value: float) -> float:
+    return max(0.0, min(100.0, value))
